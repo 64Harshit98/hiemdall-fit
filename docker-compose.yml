@@ -1,0 +1,26 @@
+services:
+  backend:
+    build: ./backend
+    container_name: workout-backend
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - JWT_SECRET=${JWT_SECRET}
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - LLM_PROVIDER=${LLM_PROVIDER:-groq}
+      - DB_PATH=/data/workout.db
+      - TZ=${TZ:-Asia/Kolkata}
+    volumes:
+      - ./data:/data
+    ports:
+      - "3001:3001"
+
+  frontend:
+    build: ./frontend
+    container_name: workout-frontend
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend
