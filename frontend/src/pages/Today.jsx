@@ -25,6 +25,12 @@ export default function Today() {
     await load();
   }
 
+  async function handleMarkRest() {
+    if (!confirm('Mark today as a rest day? This cannot be undone.')) return;
+    await api.markRestDay();
+    await load();
+  }
+
   async function handleRegenerate() {
     if (!confirm('Regenerate this week\'s plan from your recent logs? Today\'s logged sets stay saved.')) return;
     setRegenerating(true);
@@ -75,9 +81,16 @@ export default function Today() {
             Day {current_day_index + 1}{today?.name ? ` · ${today.name}` : ''}
           </h1>
         </div>
-        <button className="ghost small" onClick={handleRegenerate} disabled={regenerating}>
-          {regenerating ? <span className="spinner" /> : '↻ Regenerate plan'}
-        </button>
+        <div className="row" style={{ gap: '0.5rem' }}>
+          {today && !today.is_rest && (
+            <button className="ghost small danger" onClick={handleMarkRest}>
+              Rest day
+            </button>
+          )}
+          <button className="ghost small" onClick={handleRegenerate} disabled={regenerating}>
+            {regenerating ? <span className="spinner" /> : '↻ Regenerate plan'}
+          </button>
+        </div>
       </div>
 
       {week_summary && <p className="muted small" style={{ marginTop: '0.5rem' }}>{week_summary}</p>}

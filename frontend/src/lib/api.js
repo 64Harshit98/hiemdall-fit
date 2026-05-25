@@ -28,6 +28,7 @@ export const api = {
   generatePlan: (mode = 'initial') => request('/plans/generate', { method: 'POST', body: JSON.stringify({ mode }) }),
   getCurrentPlan: () => request('/plans/current'),
   advanceDay: () => request('/plans/advance', { method: 'POST' }),
+  markRestDay: () => request('/plans/mark-rest', { method: 'POST' }),
   planHistory: () => request('/plans/history'),
 
   // logs

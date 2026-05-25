@@ -15,9 +15,13 @@ function getProfile(userId) {
     experience: row.experience,
     goal: row.goal,
     days_per_week: row.days_per_week,
+    days_per_week_min: row.days_per_week_min ?? row.days_per_week,
+    days_per_week_max: row.days_per_week_max ?? row.days_per_week,
+    session_duration_minutes: row.session_duration_minutes ?? 60,
     injuries: row.injuries,
     equipment: JSON.parse(row.equipment_json || '[]'),
     preferences: JSON.parse(row.preferences_json || '{}'),
+    additional_activities: row.additional_activities || '',
   };
 }
 
@@ -29,6 +33,18 @@ function getRecentLogs(userId, days = 7) {
       AND completed_at >= datetime('now', ?)
     ORDER BY completed_at DESC
   `).all(userId, `-${days} days`);
+}
+
+function getPlanHistory(userId, limit = 5) {
+  const rows = db.prepare(`
+    SELECT week_start, plan_json FROM plans
+    WHERE user_id = ? AND is_active = 0
+    ORDER BY id DESC LIMIT ?
+  `).all(userId, limit);
+  return rows.map(r => {
+    const p = JSON.parse(r.plan_json);
+    return { week_start: r.week_start, week_summary: p.week_summary };
+  });
 }
 
 function deactivateOldPlans(userId) {
@@ -50,10 +66,12 @@ router.post('/generate', requireAuth, async (req, res) => {
   if (!profile) return res.status(400).json({ error: 'complete your profile first' });
 
   const mode = req.body?.mode || 'initial';
-  const recent_logs = mode === 'regenerate' ? getRecentLogs(req.user.id, 14) : null;
+  const withHistory = mode !== 'initial';
+  const recent_logs = withHistory ? getRecentLogs(req.user.id, 30) : null;
+  const plan_history = withHistory ? getPlanHistory(req.user.id) : null;
 
   try {
-    const plan = await generatePlan({ profile, recent_logs, mode });
+    const plan = await generatePlan({ profile, recent_logs, plan_history, mode });
 
     deactivateOldPlans(req.user.id);
     const result = db.prepare(`
@@ -136,6 +154,37 @@ router.post('/advance', requireAuth, (req, res) => {
   } catch {}
 
   res.json({ current_day_index: next });
+});
+
+/** Mark the current training day as a rest day and advance. */
+router.post('/mark-rest', requireAuth, (req, res) => {
+  const plan = db.prepare(`
+    SELECT id, plan_json, current_day_index FROM plans
+    WHERE user_id = ? AND is_active = 1
+    ORDER BY id DESC LIMIT 1
+  `).get(req.user.id);
+  if (!plan) return res.status(404).json({ error: 'no active plan' });
+
+  const parsed = JSON.parse(plan.plan_json);
+  const idx = plan.current_day_index;
+
+  // Mutate the day in place
+  parsed.days[idx] = { ...parsed.days[idx], is_rest: true, name: 'Rest', exercises: [] };
+
+  const next = idx + 1;
+  const atEnd = next >= parsed.days.length;
+
+  db.prepare('UPDATE plans SET plan_json = ?, current_day_index = ? WHERE id = ?')
+    .run(JSON.stringify(parsed), atEnd ? idx : next, plan.id);
+
+  try {
+    db.prepare(`
+      INSERT OR IGNORE INTO day_completions (user_id, plan_id, day_index)
+      VALUES (?, ?, ?)
+    `).run(req.user.id, plan.id, idx);
+  } catch {}
+
+  res.json({ at_end_of_week: atEnd, current_day_index: atEnd ? idx : next });
 });
 
 /** History: list past plans and weekly summaries. */

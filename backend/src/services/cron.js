@@ -28,9 +28,13 @@ export function startWeeklyCron() {
           experience: profileRow.experience,
           goal: profileRow.goal,
           days_per_week: profileRow.days_per_week,
+          days_per_week_min: profileRow.days_per_week_min ?? profileRow.days_per_week,
+          days_per_week_max: profileRow.days_per_week_max ?? profileRow.days_per_week,
+          session_duration_minutes: profileRow.session_duration_minutes ?? 60,
           injuries: profileRow.injuries,
           equipment: JSON.parse(profileRow.equipment_json || '[]'),
           preferences: JSON.parse(profileRow.preferences_json || '{}'),
+          additional_activities: profileRow.additional_activities || '',
         };
 
         const recent_logs = db.prepare(`
@@ -45,7 +49,16 @@ export function startWeeklyCron() {
           continue;
         }
 
-        const plan = await generatePlan({ profile, recent_logs, mode: 'weekly_adapt' });
+        const plan_history = db.prepare(`
+          SELECT week_start, plan_json FROM plans
+          WHERE user_id = ? AND is_active = 0
+          ORDER BY id DESC LIMIT 5
+        `).all(userId).map(r => {
+          const p = JSON.parse(r.plan_json);
+          return { week_start: r.week_start, week_summary: p.week_summary };
+        });
+
+        const plan = await generatePlan({ profile, recent_logs, plan_history, mode: 'weekly_adapt' });
 
         db.prepare('UPDATE plans SET is_active = 0 WHERE user_id = ? AND is_active = 1').run(userId);
 

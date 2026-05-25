@@ -89,4 +89,28 @@ CREATE TABLE IF NOT EXISTS day_completions (
 
 db.exec(schema);
 
+// Migrations — idempotent via PRAGMA table_info checks
+const profileCols = db.prepare('PRAGMA table_info(profiles)').all().map(c => c.name);
+
+if (!profileCols.includes('days_per_week_min')) {
+  db.exec('ALTER TABLE profiles ADD COLUMN days_per_week_min INTEGER');
+}
+if (!profileCols.includes('days_per_week_max')) {
+  db.exec('ALTER TABLE profiles ADD COLUMN days_per_week_max INTEGER');
+}
+if (!profileCols.includes('additional_activities')) {
+  db.exec('ALTER TABLE profiles ADD COLUMN additional_activities TEXT');
+}
+if (!profileCols.includes('session_duration_minutes')) {
+  db.exec('ALTER TABLE profiles ADD COLUMN session_duration_minutes INTEGER');
+}
+
+// Backfill min/max from the legacy days_per_week for existing rows
+db.prepare(`
+  UPDATE profiles
+  SET days_per_week_min = days_per_week, days_per_week_max = days_per_week
+  WHERE days_per_week IS NOT NULL
+    AND (days_per_week_min IS NULL OR days_per_week_max IS NULL)
+`).run();
+
 export default db;

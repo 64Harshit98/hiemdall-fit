@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { api } from '../lib/api.js';
 
 const EQUIPMENT_OPTIONS = [
@@ -9,7 +10,9 @@ const EQUIPMENT_OPTIONS = [
 export default function Profile() {
   const [p, setP] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [updating, setUpdating] = useState(false);
   const [msg, setMsg] = useState(null);
+  const navigate = useNavigate();
 
   useEffect(() => { api.getProfile().then(setP); }, []);
 
@@ -22,21 +25,28 @@ export default function Profile() {
   }
   function updatePref(key, value) { setP({ ...p, preferences: { ...p.preferences, [key]: value } }); }
 
+  function profilePayload() {
+    return {
+      age: Number(p.age),
+      height: Number(p.height),
+      weight: Number(p.weight),
+      experience: p.experience,
+      goal: p.goal,
+      days_per_week_min: Number(p.days_per_week_min),
+      days_per_week_max: Number(p.days_per_week_max),
+      session_duration_minutes: Number(p.session_duration_minutes ?? 60),
+      injuries: p.injuries,
+      additional_activities: p.additional_activities,
+      equipment: p.equipment,
+      preferences: p.preferences,
+    };
+  }
+
   async function save() {
     setSaving(true);
     setMsg(null);
     try {
-      await api.saveProfile({
-        age: Number(p.age),
-        height: Number(p.height),
-        weight: Number(p.weight),
-        experience: p.experience,
-        goal: p.goal,
-        days_per_week: Number(p.days_per_week),
-        injuries: p.injuries,
-        equipment: p.equipment,
-        preferences: p.preferences,
-      });
+      await api.saveProfile(profilePayload());
       setMsg({ type: 'success', text: 'Profile saved.' });
     } catch (e) {
       setMsg({ type: 'error', text: e.message });
@@ -45,11 +55,36 @@ export default function Profile() {
     }
   }
 
+  async function saveAndUpdate() {
+    setUpdating(true);
+    setMsg(null);
+    try {
+      await api.saveProfile(profilePayload());
+      await api.generatePlan('regenerate');
+      navigate('/');
+    } catch (e) {
+      setMsg({ type: 'error', text: e.message });
+      setUpdating(false);
+    }
+  }
+
+  if (updating) {
+    return (
+      <div className="card" style={{ textAlign: 'center', padding: '3rem 1.5rem' }}>
+        <div className="spinner" style={{ width: 24, height: 24 }} />
+        <h2 style={{ marginTop: '1.25rem' }}>Updating your plan</h2>
+        <p className="muted" style={{ marginTop: '0.5rem' }}>
+          Saving profile and consulting the coach. This usually takes 5–15 seconds.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <>
       <h1>Profile</h1>
       <p className="muted" style={{ marginBottom: '1.25rem' }}>
-        Change anything here, then regenerate your plan from the Today screen if you want the new info reflected.
+        Save your changes, or save and immediately get a new plan built around your updated details and workout history.
       </p>
 
       <div className="card col">
@@ -88,10 +123,33 @@ export default function Profile() {
               <option value="endurance">endurance</option>
             </select>
           </div>
+        </div>
+        <div className="row" style={{ gap: '0.75rem', marginTop: '0.75rem' }}>
           <div style={{ flex: 1 }}>
             <label>days / week</label>
-            <select value={p.days_per_week} onChange={e => update('days_per_week', e.target.value)}>
-              {[2, 3, 4, 5, 6].map(n => <option key={n} value={n}>{n}</option>)}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <select value={p.days_per_week_min} onChange={e => update('days_per_week_min', e.target.value)} style={{ flex: 1 }}>
+                {[1,2,3,4,5,6,7].map(n => <option key={n} value={n}>{n}</option>)}
+              </select>
+              <span className="muted" style={{ flexShrink: 0 }}>to</span>
+              <select value={p.days_per_week_max} onChange={e => update('days_per_week_max', e.target.value)} style={{ flex: 1 }}>
+                {[1,2,3,4,5,6,7].map(n => <option key={n} value={n}>{n}</option>)}
+              </select>
+            </div>
+            {Number(p.days_per_week_min) > Number(p.days_per_week_max)
+              ? <div style={{ color: 'var(--danger)', fontSize: '0.78rem', marginTop: '0.2rem' }}>min must be ≤ max</div>
+              : <div className="muted" style={{ fontSize: '0.78rem', marginTop: '0.2rem' }}>{p.days_per_week_min}–{p.days_per_week_max} days/week</div>
+            }
+          </div>
+          <div style={{ flex: 1 }}>
+            <label>session duration</label>
+            <select value={p.session_duration_minutes ?? 60} onChange={e => update('session_duration_minutes', e.target.value)}>
+              <option value={30}>30 min</option>
+              <option value={45}>45 min</option>
+              <option value={60}>60 min</option>
+              <option value={75}>75 min</option>
+              <option value={90}>90 min</option>
+              <option value={120}>2 hours</option>
             </select>
           </div>
         </div>
@@ -110,6 +168,17 @@ export default function Profile() {
       </div>
 
       <div className="card" style={{ marginTop: '0.75rem' }}>
+        <label>activities outside the gym</label>
+        <textarea rows="2"
+          placeholder="e.g. walk 5km daily, climb twice a week, weekend football, cycling commute"
+          value={p.additional_activities || ''}
+          onChange={e => update('additional_activities', e.target.value)} />
+        <div className="muted" style={{ fontSize: '0.78rem', marginTop: '0.35rem' }}>
+          Your coach uses this to balance total load — fewer conditioning days if you're already active, and avoids fatiguing the same muscle groups used in your sport.
+        </div>
+      </div>
+
+      <div className="card" style={{ marginTop: '0.75rem' }}>
         <label>injuries / limitations</label>
         <textarea rows="2" value={p.injuries || ''} onChange={e => update('injuries', e.target.value)} />
       </div>
@@ -123,9 +192,14 @@ export default function Profile() {
 
       {msg && <div className={msg.type === 'error' ? 'error' : 'success'} style={{ marginTop: '0.75rem' }}>{msg.text}</div>}
 
-      <button className="primary" onClick={save} disabled={saving} style={{ marginTop: '1rem' }}>
-        {saving ? <span className="spinner" /> : 'Save profile'}
-      </button>
+      <div className="row" style={{ marginTop: '1rem', gap: '0.75rem' }}>
+        <button onClick={save} disabled={saving} style={{ flex: 1 }}>
+          {saving ? <span className="spinner" /> : 'Save profile'}
+        </button>
+        <button className="primary" onClick={saveAndUpdate} disabled={saving} style={{ flex: 1 }}>
+          Save & update plan →
+        </button>
+      </div>
     </>
   );
 }

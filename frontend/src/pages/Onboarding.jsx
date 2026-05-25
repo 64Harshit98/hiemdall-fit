@@ -11,8 +11,11 @@ const initial = {
   age: '', height: '', weight: '',
   experience: 'beginner',
   goal: 'muscle gain',
-  days_per_week: 4,
+  days_per_week_min: 3,
+  days_per_week_max: 5,
+  session_duration_minutes: 60,
   injuries: '',
+  additional_activities: '',
   equipment: ['bodyweight only'],
   preferences: { liked: '', disliked: '' },
 };
@@ -43,7 +46,8 @@ export default function Onboarding({ onDone }) {
         age: Number(state.age),
         height: Number(state.height),
         weight: Number(state.weight),
-        days_per_week: Number(state.days_per_week),
+        days_per_week_min: Number(state.days_per_week_min),
+        days_per_week_max: Number(state.days_per_week_max),
       });
       await api.generatePlan('initial');
       await onDone();
@@ -115,11 +119,38 @@ export default function Onboarding({ onDone }) {
                 <option value="endurance">endurance</option>
               </select>
             </div>
+          </div>
+          <div className="row" style={{ gap: '0.75rem', marginTop: '0.75rem' }}>
             <div style={{ flex: 1 }}>
               <label>days / week</label>
-              <select value={state.days_per_week}
-                      onChange={e => dispatch({ type: 'set', key: 'days_per_week', value: e.target.value })}>
-                {[2, 3, 4, 5, 6].map(n => <option key={n} value={n}>{n}</option>)}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <select value={state.days_per_week_min}
+                        onChange={e => dispatch({ type: 'set', key: 'days_per_week_min', value: e.target.value })}
+                        style={{ flex: 1 }}>
+                  {[1,2,3,4,5,6,7].map(n => <option key={n} value={n}>{n}</option>)}
+                </select>
+                <span className="muted" style={{ flexShrink: 0 }}>to</span>
+                <select value={state.days_per_week_max}
+                        onChange={e => dispatch({ type: 'set', key: 'days_per_week_max', value: e.target.value })}
+                        style={{ flex: 1 }}>
+                  {[1,2,3,4,5,6,7].map(n => <option key={n} value={n}>{n}</option>)}
+                </select>
+              </div>
+              {Number(state.days_per_week_min) > Number(state.days_per_week_max)
+                ? <div style={{ color: 'var(--danger)', fontSize: '0.78rem', marginTop: '0.2rem' }}>min must be ≤ max</div>
+                : <div className="muted" style={{ fontSize: '0.78rem', marginTop: '0.2rem' }}>{state.days_per_week_min}–{state.days_per_week_max} days/week</div>
+              }
+            </div>
+            <div style={{ flex: 1 }}>
+              <label>session duration</label>
+              <select value={state.session_duration_minutes}
+                      onChange={e => dispatch({ type: 'set', key: 'session_duration_minutes', value: e.target.value })}>
+                <option value={30}>30 min</option>
+                <option value={45}>45 min</option>
+                <option value={60}>60 min</option>
+                <option value={75}>75 min</option>
+                <option value={90}>90 min</option>
+                <option value={120}>2 hours</option>
               </select>
             </div>
           </div>
@@ -136,6 +167,16 @@ export default function Onboarding({ onDone }) {
                 {opt}
               </label>
             ))}
+          </div>
+        </div>
+
+        <div className="card">
+          <label>activities outside the gym</label>
+          <textarea rows="2" placeholder="e.g. walk 5km daily, climb twice a week, weekend football, cycling commute"
+                    value={state.additional_activities}
+                    onChange={e => dispatch({ type: 'set', key: 'additional_activities', value: e.target.value })} />
+          <div className="muted" style={{ fontSize: '0.78rem', marginTop: '0.35rem' }}>
+            Your coach uses this to balance total load — fewer conditioning days if you're already active, and avoids fatiguing the same muscle groups used in your sport.
           </div>
         </div>
 

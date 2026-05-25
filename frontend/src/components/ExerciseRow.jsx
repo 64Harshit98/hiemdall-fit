@@ -77,11 +77,30 @@ export default function ExerciseRow({ exercise, planId, dayIndex, existingLogs, 
           {sets.map((s, i) => (
             <div className="set-grid" key={i}>
               <div className="set-label mono">{i + 1}</div>
-              <input
-                type="number" step="0.5" inputMode="decimal" placeholder="kg"
-                value={s.weight}
-                onChange={e => updateSet(i, 'weight', e.target.value)}
-              />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+                <input
+                  type="number" step="2.5" inputMode="decimal" placeholder="kg"
+                  value={s.weight}
+                  onChange={e => updateSet(i, 'weight', e.target.value)}
+                />
+                <div style={{ display: 'flex', gap: '0.2rem' }}>
+                  <button type="button" className="ghost small"
+                    style={{ flex: 1, padding: '0.1rem 0', fontSize: '0.7rem', minWidth: 0 }}
+                    onClick={() => updateSet(i, 'weight', Math.max(0, (Number(s.weight) || 0) - 2.5))}>
+                    −2.5
+                  </button>
+                  <button type="button" className="ghost small"
+                    style={{ flex: 1, padding: '0.1rem 0', fontSize: '0.7rem', minWidth: 0 }}
+                    onClick={() => updateSet(i, 'weight', (Number(s.weight) || 0) + 2.5)}>
+                    +2.5
+                  </button>
+                  <button type="button" className="ghost small"
+                    style={{ flex: 1, padding: '0.1rem 0', fontSize: '0.7rem', minWidth: 0 }}
+                    onClick={() => updateSet(i, 'weight', (Number(s.weight) || 0) + 5)}>
+                    +5
+                  </button>
+                </div>
+              </div>
               <input
                 type="number" inputMode="numeric" placeholder={exercise.reps}
                 value={s.reps}

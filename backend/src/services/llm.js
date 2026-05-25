@@ -40,18 +40,23 @@ Output schema:
 }
 
 Rules:
-- Number of days in array MUST equal user's days_per_week scheduled days + rest days to make a 7-day week (so always 7 entries, day_index 0..6).
+- The profile contains days_per_week_min and days_per_week_max, which define the user's acceptable range of gym training days. Choose a specific number of training days within this range based on the user's goal, recovery capacity, and additional_activities load. Always output exactly 7 days total (training days + rest days = 7, day_index 0..6).
+- Session structure (MANDATORY): every non-rest day MUST follow a compound-first approach. Lead with 1-2 primary compound movements from the fundamental patterns (squat, hip hinge/deadlift, horizontal push, horizontal pull, vertical push, vertical pull) then follow with 3-5 accessory/supplementary exercises that target the same muscle groups or address weak points. Never programme fewer than 5 exercises on a training day. Aim for 6-8 exercises for sessions of 60 minutes or longer.
+- session_duration_minutes tells you how long the user can train. Scale volume to fit within that window: ~30 min → 4-5 exercises, 2-3 sets each, short rest; ~45 min → 5-6 exercises, 3 sets; ~60 min → 6-7 exercises, 3-4 sets; ~75 min → 7-8 exercises, 3-4 sets; ~90 min+ → 8-9 exercises, 4-5 sets. Set rest_seconds shorter for time-limited sessions (60-90s) and longer for heavy strength work (120-180s).
+- additional_activities lists physical activity the user does outside the gym (e.g. "cycling commute, weekend football, climbing twice a week"). Factor this into the programme: reduce gym conditioning work if the user already accumulates significant cardio; avoid prescribing exercises that heavily overlap muscle groups already fatigued by their sport (e.g. reduce upper-body pulling volume if the user climbs regularly; avoid heavy leg work the day before a long run). The week_summary MUST explicitly mention how the additional activities were considered and what programming decisions they influenced (or state "no additional activities" if the field is empty).
 - Respect injuries: never prescribe contraindicated movements.
 - Match equipment: only use exercises the user can do with their listed equipment.
 - Respect dislikes; favor liked exercises where biomechanically sensible.
-- Progressive overload aware: when recent_logs are provided, increase load/reps modestly on lifts where the user hit prescribed reps comfortably; deload (~10%) on lifts where reps were missed or pain was noted.`;
+- Progressive overload aware: when recent_logs are provided, increase load/reps modestly on lifts where the user hit prescribed reps comfortably; deload (~10%) on lifts where reps were missed or pain was noted.
+- plan_history contains week_summary strings from previous plans. Use these to avoid repeating the same weekly structure back-to-back, identify longer-term progression trends, and vary exercise selection meaningfully across weeks.`;
 
 function buildUserPrompt(input) {
-  const { profile, recent_logs, mode } = input;
+  const { profile, recent_logs, plan_history, mode } = input;
   return JSON.stringify({
     mode: mode || 'initial',
     profile,
     recent_logs: recent_logs || null,
+    plan_history: plan_history || null,
   });
 }
 
