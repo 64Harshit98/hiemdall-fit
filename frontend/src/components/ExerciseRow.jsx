@@ -66,6 +66,16 @@ export default function ExerciseRow({ exercise, planId, dayIndex, existingLogs, 
         <div className="form-tip">{exercise.form_tip}</div>
       )}
 
+      {exercise.alternate_exercise && open && (
+        <div className="alternate-exercise">
+          <span className="alternate-label">⇄ swap</span>
+          <span className="alternate-name">{exercise.alternate_exercise.name}</span>
+          {exercise.alternate_exercise.note && (
+            <span className="alternate-note"> — {exercise.alternate_exercise.note}</span>
+          )}
+        </div>
+      )}
+
       {open && (
         <div style={{ marginTop: '0.75rem' }}>
           <div className="set-grid">

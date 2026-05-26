@@ -63,9 +63,11 @@ export default function App() {
             heimdall<span className="accent">·</span>fit
           </Link>
           <nav className="nav">
-            <NavLink to="/" end>Today</NavLink>
-            <NavLink to="/history">History</NavLink>
-            <NavLink to="/profile">Profile</NavLink>
+            <div className="nav-links">
+              <NavLink to="/" end>Today</NavLink>
+              <NavLink to="/history">History</NavLink>
+              <NavLink to="/profile">Profile</NavLink>
+            </div>
             <button className="ghost small" onClick={handleLogout} style={{ padding: '0.3rem 0.7rem', fontSize: '0.8rem' }}>
               {user.username} ↗
             </button>
@@ -82,6 +84,21 @@ export default function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
+
+      <nav className="bottom-nav">
+        <NavLink to="/" end className={({ isActive }) => `bottom-nav-item${isActive ? ' active' : ''}`}>
+          <svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+          <span>Today</span>
+        </NavLink>
+        <NavLink to="/history" className={({ isActive }) => `bottom-nav-item${isActive ? ' active' : ''}`}>
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          <span>History</span>
+        </NavLink>
+        <NavLink to="/profile" className={({ isActive }) => `bottom-nav-item${isActive ? ' active' : ''}`}>
+          <svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          <span>Profile</span>
+        </NavLink>
+      </nav>
     </>
   );
 }

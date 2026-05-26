@@ -32,7 +32,11 @@ Output schema:
           "reps": string (e.g. "8-10" or "5"),
           "target_weight": string (e.g. "60kg" or "bodyweight" or "RPE 8"),
           "rest_seconds": integer,
-          "form_tip": string (one short sentence)
+          "form_tip": string (one short sentence),
+          "alternate_exercise": {
+            "name": string,
+            "note": string (one short sentence — why you'd swap, e.g. "use if no barbell available" or "easier on the lower back")
+          }
         }
       ]
     }
@@ -47,6 +51,7 @@ Rules:
 - Respect injuries: never prescribe contraindicated movements.
 - Match equipment: only use exercises the user can do with their listed equipment.
 - Respect dislikes; favor liked exercises where biomechanically sensible.
+- Every exercise MUST include an alternate_exercise with a different movement that trains the same pattern or muscle group. Pick a genuinely useful swap — different equipment, lower skill demand, or joint-friendlier variation (e.g. bench press → dumbbell press; barbell squat → goblet squat; pull-up → lat pulldown).
 - Progressive overload aware: when recent_logs are provided, increase load/reps modestly on lifts where the user hit prescribed reps comfortably; deload (~10%) on lifts where reps were missed or pain was noted.
 - plan_history contains week_summary strings from previous plans. Use these to avoid repeating the same weekly structure back-to-back, identify longer-term progression trends, and vary exercise selection meaningfully across weeks.`;
 

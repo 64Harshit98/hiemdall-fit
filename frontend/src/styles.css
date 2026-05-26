@@ -241,6 +241,11 @@ label {
   gap: 1.25rem;
   align-items: center;
 }
+.nav-links {
+  display: flex;
+  gap: 1.25rem;
+  align-items: center;
+}
 .nav a {
   color: var(--text-dim);
   font-size: 0.88rem;
@@ -250,6 +255,39 @@ label {
 .nav a.active {
   color: var(--text);
   text-decoration: none;
+}
+
+/* Bottom tab bar — hidden on desktop */
+.bottom-nav {
+  display: none;
+}
+.bottom-nav-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 0.6rem 0;
+  gap: 0.25rem;
+  color: var(--text-dim);
+  text-decoration: none;
+  font-size: 0.68rem;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  transition: color 0.12s;
+}
+.bottom-nav-item svg {
+  width: 22px;
+  height: 22px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.bottom-nav-item.active {
+  color: var(--accent);
 }
 
 /* Exercise card */
@@ -287,6 +325,34 @@ label {
   margin-top: 0.5rem;
   padding-left: 0.75rem;
   border-left: 2px solid var(--accent-dim);
+}
+
+.alternate-exercise {
+  margin-top: 0.4rem;
+  padding: 0.4rem 0.65rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 0.82rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.3rem;
+}
+.alternate-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-faint);
+  flex-shrink: 0;
+}
+.alternate-name {
+  font-weight: 600;
+  color: var(--text);
+}
+.alternate-note {
+  color: var(--text-dim);
 }
 
 .set-grid {
@@ -471,12 +537,28 @@ label {
     font-size: 1.75rem;
   }
   .container {
-    padding: 1.25rem 1rem 4rem;
+    padding: 1.25rem 1rem calc(4.5rem + env(safe-area-inset-bottom));
   }
   .stats-grid {
     grid-template-columns: 1fr 1fr;
   }
   .set-grid {
     grid-template-columns: 26px 1fr 1fr 28px;
+  }
+
+  /* Swap top nav for bottom tab bar */
+  .nav-links {
+    display: none;
+  }
+  .bottom-nav {
+    display: flex;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: var(--bg-elev);
+    border-top: 1px solid var(--border);
+    z-index: 100;
+    padding-bottom: env(safe-area-inset-bottom);
   }
 }
