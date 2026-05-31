@@ -7,6 +7,15 @@ const EQUIPMENT_OPTIONS = [
   'pull-up bar', 'resistance bands', 'bench', 'bodyweight only',
 ];
 
+const SPLIT_SUGGESTIONS = [
+  'Push / Pull / Legs',
+  'Upper / Lower',
+  'Full body each session',
+  'Bro split — one muscle group per day',
+  'One big + one small muscle per day',
+  'Arnold split',
+];
+
 const initial = {
   age: '', height: '', weight: '',
   experience: 'beginner',
@@ -16,6 +25,7 @@ const initial = {
   session_duration_minutes: 60,
   injuries: '',
   additional_activities: '',
+  split_preference: '',
   equipment: ['bodyweight only'],
   preferences: { liked: '', disliked: '' },
 };
@@ -167,6 +177,28 @@ export default function Onboarding({ onDone }) {
                 {opt}
               </label>
             ))}
+          </div>
+        </div>
+
+        <div className="card">
+          <label>preferred workout split</label>
+          <input type="text" list="split-suggestions" placeholder="e.g. push pull legs, upper/lower, one big + one small muscle"
+                 value={state.split_preference}
+                 onChange={e => dispatch({ type: 'set', key: 'split_preference', value: e.target.value })} />
+          <datalist id="split-suggestions">
+            {SPLIT_SUGGESTIONS.map(s => <option key={s} value={s} />)}
+          </datalist>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', marginTop: '0.5rem' }}>
+            {SPLIT_SUGGESTIONS.map(s => (
+              <button type="button" key={s} className="ghost small"
+                      onClick={() => dispatch({ type: 'set', key: 'split_preference', value: s })}
+                      style={{ fontSize: '0.75rem', padding: '0.25rem 0.6rem' }}>
+                {s}
+              </button>
+            ))}
+          </div>
+          <div className="muted" style={{ fontSize: '0.78rem', marginTop: '0.35rem' }}>
+            Free text — tell the coach how you like to organise your week. Tap a suggestion or write your own. Leave blank and the coach picks the best split for your training days.
           </div>
         </div>
 

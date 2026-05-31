@@ -22,6 +22,7 @@ function getProfile(userId) {
     equipment: JSON.parse(row.equipment_json || '[]'),
     preferences: JSON.parse(row.preferences_json || '{}'),
     additional_activities: row.additional_activities || '',
+    split_preference: row.split_preference || '',
   };
 }
 
@@ -116,29 +117,49 @@ router.get('/current', requireAuth, (req, res) => {
   if (!plan) return res.json(null);
 
   const parsed = JSON.parse(plan.plan_json);
-  const today = parsed.days[plan.current_day_index];
+  const currentIdx = plan.current_day_index;
+  const len = parsed.days.length;
 
-  // Logs for today's exercises (this plan, this day_index)
+  // Optionally view a different day (preview upcoming / review past days).
+  let viewIdx = currentIdx;
+  if (req.query.day != null && req.query.day !== '') {
+    const d = Number(req.query.day);
+    if (Number.isInteger(d) && d >= 0 && d < len) viewIdx = d;
+  }
+  const isCurrent = viewIdx === currentIdx;
+  const today = parsed.days[viewIdx];
+
+  // Surface undo info so the rest card can show the original exercises.
+  if (isCurrent && parsed._rest_undo && today.is_rest) {
+    today.can_undo_rest = true;
+    today.stashed_exercises = parsed._rest_undo.days[currentIdx].exercises;
+  }
+
+  // Logs for the viewed day's exercises (this plan, this day_index)
   const logs = db.prepare(`
     SELECT exercise_name, set_index, weight, reps, notes, completed_at
     FROM workout_logs
     WHERE plan_id = ? AND day_index = ?
     ORDER BY exercise_name, set_index
-  `).all(plan.id, plan.current_day_index);
+  `).all(plan.id, viewIdx);
 
-  // Session stats for today's date
-  const stats = db.prepare(`
-    SELECT * FROM session_stats
-    WHERE user_id = ? AND session_date = ?
-    ORDER BY id DESC LIMIT 1
-  `).get(req.user.id, todayYmd());
+  // Session stats only apply to the current (today's) day.
+  const stats = isCurrent
+    ? db.prepare(`
+        SELECT * FROM session_stats
+        WHERE user_id = ? AND session_date = ?
+        ORDER BY id DESC LIMIT 1
+      `).get(req.user.id, todayYmd())
+    : null;
 
   res.json({
     plan_id: plan.id,
     week_start: plan.week_start,
     week_summary: parsed.week_summary,
-    current_day_index: plan.current_day_index,
-    total_days: parsed.days.length,
+    current_day_index: currentIdx,
+    viewing_day_index: viewIdx,
+    is_current: isCurrent,
+    total_days: len,
     today,
     logs,
     stats: stats || null,
@@ -162,7 +183,14 @@ router.post('/advance', requireAuth, (req, res) => {
     return res.json({ at_end_of_week: true, current_day_index: plan.current_day_index });
   }
 
-  db.prepare('UPDATE plans SET current_day_index = ? WHERE id = ?').run(next, plan.id);
+  // Drop any lingering undo snapshot so it can't apply to a future rest day.
+  if (parsed._rest_undo) {
+    delete parsed._rest_undo;
+    db.prepare('UPDATE plans SET current_day_index = ?, plan_json = ? WHERE id = ?')
+      .run(next, JSON.stringify(parsed), plan.id);
+  } else {
+    db.prepare('UPDATE plans SET current_day_index = ? WHERE id = ?').run(next, plan.id);
+  }
 
   // Mark previous day as completed
   try {
@@ -175,7 +203,12 @@ router.post('/advance', requireAuth, (req, res) => {
   res.json({ current_day_index: next });
 });
 
-/** Mark the current training day as a rest day and advance. */
+/**
+ * Mark the current training day as a rest day. Today's workout is smart-shifted
+ * forward by one day (each subsequent day cascades to the following slot); any
+ * workout that overflows off the end of the week is retained in _carryover. We
+ * stay on the rest day (no advance) and keep an undo snapshot so it can be reverted.
+ */
 router.post('/mark-rest', requireAuth, (req, res) => {
   const plan = db.prepare(`
     SELECT id, plan_json, current_day_index FROM plans
@@ -187,23 +220,104 @@ router.post('/mark-rest', requireAuth, (req, res) => {
   const parsed = JSON.parse(plan.plan_json);
   const idx = plan.current_day_index;
 
-  // Mutate the day in place
-  parsed.days[idx] = { ...parsed.days[idx], is_rest: true, name: 'Rest', exercises: [] };
+  if (parsed.days[idx].is_rest) {
+    return res.status(400).json({ error: 'this day is already a rest day' });
+  }
 
-  const next = idx + 1;
-  const atEnd = next >= parsed.days.length;
+  // Snapshot the full week before mutating, so the shift can be reversed.
+  parsed._rest_undo = {
+    days: structuredClone(parsed.days),
+    carryover: parsed._carryover ? structuredClone(parsed._carryover) : null,
+  };
 
-  db.prepare('UPDATE plans SET plan_json = ?, current_day_index = ? WHERE id = ?')
-    .run(JSON.stringify(parsed), atEnd ? idx : next, plan.id);
+  const last = parsed.days.length - 1;
+  const tail = structuredClone(parsed.days.slice(idx)); // [old idx, old idx+1, ...]
+  const restDay = { day_index: idx, name: 'Rest', is_rest: true, exercises: [] };
 
-  try {
-    db.prepare(`
-      INSERT OR IGNORE INTO day_completions (user_id, plan_id, day_index)
-      VALUES (?, ?, ?)
-    `).run(req.user.id, plan.id, idx);
-  } catch {}
+  // The content originally at the last position overflows when we shift down.
+  const overflow = tail[last - idx];
+  if (overflow && !overflow.is_rest && Array.isArray(overflow.exercises) && overflow.exercises.length) {
+    if (!parsed._carryover) parsed._carryover = [];
+    parsed._carryover.push(...overflow.exercises.map(ex => ({ ...ex, carried_over: true })));
+  }
 
-  res.json({ at_end_of_week: atEnd, current_day_index: atEnd ? idx : next });
+  // Cascade: rest at idx, each old day moves one slot later.
+  parsed.days[idx] = restDay;
+  for (let p = idx + 1; p <= last; p++) {
+    parsed.days[p] = { ...tail[p - 1 - idx], day_index: p };
+  }
+
+  db.prepare('UPDATE plans SET plan_json = ? WHERE id = ?')
+    .run(JSON.stringify(parsed), plan.id);
+
+  res.json({ current_day_index: idx, can_undo_rest: true });
+});
+
+/** Convert a user-marked rest day back into its original workout. */
+router.post('/unmark-rest', requireAuth, (req, res) => {
+  const plan = db.prepare(`
+    SELECT id, plan_json, current_day_index FROM plans
+    WHERE user_id = ? AND is_active = 1
+    ORDER BY id DESC LIMIT 1
+  `).get(req.user.id);
+  if (!plan) return res.status(404).json({ error: 'no active plan' });
+
+  const parsed = JSON.parse(plan.plan_json);
+  const idx = plan.current_day_index;
+
+  if (!parsed._rest_undo) return res.status(400).json({ error: 'nothing to undo' });
+
+  parsed.days = parsed._rest_undo.days;
+  if (parsed._rest_undo.carryover) parsed._carryover = parsed._rest_undo.carryover;
+  else delete parsed._carryover;
+  delete parsed._rest_undo;
+
+  db.prepare('UPDATE plans SET plan_json = ? WHERE id = ?')
+    .run(JSON.stringify(parsed), plan.id);
+
+  res.json({ current_day_index: idx });
+});
+
+/**
+ * Swap an exercise on the current day with its suggested alternate.
+ * Keeps the prescription (sets/reps/weight/rest) and remains reversible —
+ * the original exercise becomes the new alternate, so swapping again swaps back.
+ */
+router.post('/swap-exercise', requireAuth, (req, res) => {
+  const { exercise_name } = req.body || {};
+  if (!exercise_name) return res.status(400).json({ error: 'exercise_name required' });
+
+  const plan = db.prepare(`
+    SELECT id, plan_json, current_day_index FROM plans
+    WHERE user_id = ? AND is_active = 1
+    ORDER BY id DESC LIMIT 1
+  `).get(req.user.id);
+  if (!plan) return res.status(404).json({ error: 'no active plan' });
+
+  const parsed = JSON.parse(plan.plan_json);
+  const day = parsed.days[plan.current_day_index];
+  if (!day || day.is_rest || !Array.isArray(day.exercises)) {
+    return res.status(400).json({ error: 'no exercises on the current day' });
+  }
+
+  const i = day.exercises.findIndex(ex => ex.name === exercise_name);
+  if (i === -1) return res.status(404).json({ error: 'exercise not found on the current day' });
+
+  const ex = day.exercises[i];
+  const alt = ex.alternate_exercise;
+  if (!alt || !alt.name) return res.status(400).json({ error: 'this exercise has no alternate' });
+
+  // Swap: alternate becomes the active exercise; original becomes the new alternate.
+  day.exercises[i] = {
+    ...ex,
+    name: alt.name,
+    form_tip: alt.note || ex.form_tip,
+    alternate_exercise: { name: ex.name, note: ex.form_tip || 'back to the original exercise' },
+    swapped: true,
+  };
+
+  db.prepare('UPDATE plans SET plan_json = ? WHERE id = ?').run(JSON.stringify(parsed), plan.id);
+  res.json({ ok: true, name: alt.name });
 });
 
 /** History: list past plans and weekly summaries. */

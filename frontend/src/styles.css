@@ -338,6 +338,21 @@ label {
   flex-wrap: wrap;
   align-items: baseline;
   gap: 0.3rem;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  font-family: inherit;
+  transition:
+    border-color 0.15s,
+    background 0.15s;
+}
+.alternate-exercise:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: var(--bg-card);
+}
+.alternate-exercise:disabled {
+  opacity: 0.6;
+  cursor: default;
 }
 .alternate-label {
   font-size: 0.72rem;
@@ -414,7 +429,7 @@ label {
   gap: 0.4rem;
   margin: 1rem 0 1.5rem;
   overflow-x: auto;
-  padding-bottom: 0.25rem;
+  padding: 1rem 0.25rem;
 }
 .day-pill {
   flex: 0 0 auto;
@@ -426,6 +441,15 @@ label {
   border: 1px solid var(--border);
   color: var(--text-dim);
   white-space: nowrap;
+  cursor: pointer;
+  font-family: inherit;
+  transition:
+    border-color 0.15s,
+    color 0.15s,
+    transform 0.1s;
+}
+.day-pill:hover {
+  border-color: var(--accent);
 }
 .day-pill.current {
   background: var(--accent);
@@ -435,6 +459,13 @@ label {
 .day-pill.done {
   border-color: var(--accent-dim);
   color: var(--accent);
+}
+.day-pill.locked {
+  opacity: 0.55;
+}
+.day-pill.viewing {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }
 
 /* Auth screens */

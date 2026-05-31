@@ -26,9 +26,11 @@ export const api = {
 
   // plans
   generatePlan: (mode = 'initial') => request('/plans/generate', { method: 'POST', body: JSON.stringify({ mode }) }),
-  getCurrentPlan: () => request('/plans/current'),
+  getCurrentPlan: (day) => request('/plans/current' + (day != null ? `?day=${day}` : '')),
   advanceDay: () => request('/plans/advance', { method: 'POST' }),
   markRestDay: () => request('/plans/mark-rest', { method: 'POST' }),
+  unmarkRestDay: () => request('/plans/unmark-rest', { method: 'POST' }),
+  swapExercise: (exerciseName) => request('/plans/swap-exercise', { method: 'POST', body: JSON.stringify({ exercise_name: exerciseName }) }),
   planHistory: () => request('/plans/history'),
 
   // logs

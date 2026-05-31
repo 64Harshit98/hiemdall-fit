@@ -25,7 +25,7 @@ router.put('/', requireAuth, (req, res) => {
     age, height, weight, experience, goal,
     days_per_week_min, days_per_week_max,
     session_duration_minutes,
-    injuries, equipment, preferences, additional_activities,
+    injuries, equipment, preferences, additional_activities, split_preference,
   } = req.body || {};
 
   if (!age || !height || !weight || !experience || !goal || !days_per_week_min || !days_per_week_max) {
@@ -44,8 +44,8 @@ router.put('/', requireAuth, (req, res) => {
   const preferencesJson = JSON.stringify(preferences || {});
 
   db.prepare(`
-    INSERT INTO profiles (user_id, age, height, weight, experience, goal, days_per_week, days_per_week_min, days_per_week_max, session_duration_minutes, injuries, equipment_json, preferences_json, additional_activities, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+    INSERT INTO profiles (user_id, age, height, weight, experience, goal, days_per_week, days_per_week_min, days_per_week_max, session_duration_minutes, injuries, equipment_json, preferences_json, additional_activities, split_preference, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
     ON CONFLICT(user_id) DO UPDATE SET
       age = excluded.age,
       height = excluded.height,
@@ -60,8 +60,9 @@ router.put('/', requireAuth, (req, res) => {
       equipment_json = excluded.equipment_json,
       preferences_json = excluded.preferences_json,
       additional_activities = excluded.additional_activities,
+      split_preference = excluded.split_preference,
       updated_at = datetime('now')
-  `).run(req.user.id, age, height, weight, experience, goal, max, min, max, session_duration_minutes || 60, injuries || '', equipmentJson, preferencesJson, additional_activities || '');
+  `).run(req.user.id, age, height, weight, experience, goal, max, min, max, session_duration_minutes || 60, injuries || '', equipmentJson, preferencesJson, additional_activities || '', split_preference || '');
 
   res.json({ ok: true });
 });

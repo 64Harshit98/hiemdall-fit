@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
 import { api } from '../lib/api.js';
 
-export default function ExerciseRow({ exercise, planId, dayIndex, existingLogs, isComplete, onLogged }) {
-  const [open, setOpen] = useState(!isComplete);
+export default function ExerciseRow({ exercise, planId, dayIndex, existingLogs, isComplete, onLogged, readOnly = false }) {
+  const [open, setOpen] = useState(readOnly ? false : !isComplete);
   const [sets, setSets] = useState([]);
   const [notes, setNotes] = useState('');
   const [savingIdx, setSavingIdx] = useState(null);
+  const [swapping, setSwapping] = useState(false);
 
   // Initialise sets state from existing logs, padding to exercise.sets
   useEffect(() => {
@@ -48,18 +49,39 @@ export default function ExerciseRow({ exercise, planId, dayIndex, existingLogs, 
     setSets(prev => prev.map((x, idx) => idx === i ? { ...x, [key]: value } : x));
   }
 
+  async function handleSwap(e) {
+    e.stopPropagation();
+    if (!exercise.alternate_exercise || swapping) return;
+    setSwapping(true);
+    try {
+      await api.swapExercise(exercise.name);
+      onLogged(); // reloads the plan so the swapped exercise renders
+    } catch (err) {
+      alert('Swap failed: ' + err.message);
+    } finally {
+      setSwapping(false);
+    }
+  }
+
   return (
     <div className={`exercise ${isComplete ? 'done' : ''}`}>
       <div className="exercise-head" onClick={() => setOpen(!open)}>
         <div>
-          <div className="exercise-name">{exercise.name}</div>
+          <div className="exercise-name">
+            {exercise.name}
+            {exercise.carried_over && (
+              <span className="tag" style={{ marginLeft: '0.5rem', fontSize: '0.7rem', borderColor: 'var(--accent-dim)', color: 'var(--accent)' }}>
+                ↻ carried over
+              </span>
+            )}
+          </div>
           <div className="exercise-prescription">
             {exercise.sets} × {exercise.reps}
             {exercise.target_weight && ` · ${exercise.target_weight}`}
             {exercise.rest_seconds ? ` · rest ${exercise.rest_seconds}s` : ''}
           </div>
         </div>
-        <div className="muted small">{isComplete ? '✓' : open ? '▾' : '▸'}</div>
+        <div className="muted small">{isComplete && !readOnly ? '✓' : open ? '▾' : '▸'}</div>
       </div>
 
       {exercise.form_tip && open && (
@@ -67,16 +89,32 @@ export default function ExerciseRow({ exercise, planId, dayIndex, existingLogs, 
       )}
 
       {exercise.alternate_exercise && open && (
-        <div className="alternate-exercise">
-          <span className="alternate-label">⇄ swap</span>
-          <span className="alternate-name">{exercise.alternate_exercise.name}</span>
-          {exercise.alternate_exercise.note && (
-            <span className="alternate-note"> — {exercise.alternate_exercise.note}</span>
-          )}
-        </div>
+        readOnly ? (
+          <div className="alternate-exercise" style={{ cursor: 'default' }}>
+            <span className="alternate-label">⇄ alt</span>
+            <span className="alternate-name">{exercise.alternate_exercise.name}</span>
+            {exercise.alternate_exercise.note && (
+              <span className="alternate-note"> — {exercise.alternate_exercise.note}</span>
+            )}
+          </div>
+        ) : (
+          <button
+            type="button"
+            className="alternate-exercise"
+            onClick={handleSwap}
+            disabled={swapping}
+            title={`Swap to ${exercise.alternate_exercise.name}`}
+          >
+            <span className="alternate-label">{swapping ? '…' : '⇄ swap'}</span>
+            <span className="alternate-name">{exercise.alternate_exercise.name}</span>
+            {exercise.alternate_exercise.note && (
+              <span className="alternate-note"> — {exercise.alternate_exercise.note}</span>
+            )}
+          </button>
+        )
       )}
 
-      {open && (
+      {open && !readOnly && (
         <div style={{ marginTop: '0.75rem' }}>
           <div className="set-grid">
             <div className="set-label">set</div>

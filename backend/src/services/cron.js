@@ -3,13 +3,55 @@ import db from '../db/index.js';
 import { generatePlan } from './llm.js';
 
 /**
- * Weekly cron: every Sunday at 22:00 in the container's TZ.
+ * Compute exercises that were prescribed but not fully completed in a plan.
+ * Returns a deduped (by name) array shaped like plan exercises, each tagged
+ * carried_over:true. Combines per-day shortfalls with any overflow stashed in
+ * _carryover by a smart-shifted rest day.
+ */
+function getUnfinishedExercises(planId, parsed) {
+  const byName = new Map(); // name -> exercise entry (keep larger remaining sets)
+  const add = (ex) => {
+    const existing = byName.get(ex.name);
+    if (!existing || (ex.sets || 0) > (existing.sets || 0)) byName.set(ex.name, ex);
+  };
+
+  for (const day of parsed.days || []) {
+    if (day.is_rest || !Array.isArray(day.exercises)) continue;
+    for (const ex of day.exercises) {
+      const { count } = db.prepare(`
+        SELECT COUNT(*) AS count FROM workout_logs
+        WHERE plan_id = ? AND day_index = ? AND exercise_name = ?
+      `).get(planId, day.day_index, ex.name);
+      const remaining = (ex.sets || 0) - count;
+      if (remaining > 0) {
+        add({
+          name: ex.name,
+          sets: remaining,
+          reps: ex.reps,
+          target_weight: ex.target_weight,
+          rest_seconds: ex.rest_seconds,
+          form_tip: ex.form_tip,
+          alternate_exercise: ex.alternate_exercise,
+          carried_over: true,
+        });
+      }
+    }
+  }
+
+  for (const ex of parsed._carryover || []) add({ ...ex, carried_over: true });
+
+  return [...byName.values()];
+}
+
+/**
+ * Weekly cron: every Monday at 04:00 in the container's TZ.
  * For each user with an active plan, generate next week's plan
- * informed by the last 7 days of logs.
+ * informed by the last 7 days of logs, and strict-add any exercises
+ * left unfinished in the previous week.
  */
 export function startWeeklyCron() {
-  // sec? no — node-cron uses 5-field by default: min hour day month dow
-  cron.schedule('0 22 * * 0', async () => {
+  // node-cron uses 5-field by default: min hour day month dow (1 = Monday)
+  cron.schedule('0 4 * * 1', async () => {
     console.log('[cron] Weekly plan adaptation starting');
     const users = db.prepare(`
       SELECT DISTINCT u.id FROM users u
@@ -35,6 +77,7 @@ export function startWeeklyCron() {
           equipment: JSON.parse(profileRow.equipment_json || '[]'),
           preferences: JSON.parse(profileRow.preferences_json || '{}'),
           additional_activities: profileRow.additional_activities || '',
+          split_preference: profileRow.split_preference || '',
         };
 
         const recent_logs = db.prepare(`
@@ -68,7 +111,23 @@ export function startWeeklyCron() {
           return { date_range: latestReportRow.date_range, created_at: latestReportRow.created_at, user_note: latestReportRow.user_note || null, summary: r.summary, concerns: r.concerns, recommendations: r.recommendations };
         })() : null;
 
+        // Capture the outgoing plan so we can carry forward unfinished work.
+        const outgoing = db.prepare(`
+          SELECT id, plan_json FROM plans
+          WHERE user_id = ? AND is_active = 1
+          ORDER BY id DESC LIMIT 1
+        `).get(userId);
+        const carryover = outgoing
+          ? getUnfinishedExercises(outgoing.id, JSON.parse(outgoing.plan_json))
+          : [];
+
         const plan = await generatePlan({ profile, recent_logs, plan_history, latest_report, mode: 'weekly_adapt' });
+
+        // Strict-add: append unfinished exercises onto the first training day.
+        if (carryover.length) {
+          const firstTrainingDay = plan.days.find(d => !d.is_rest && Array.isArray(d.exercises));
+          if (firstTrainingDay) firstTrainingDay.exercises.push(...carryover);
+        }
 
         db.prepare('UPDATE plans SET is_active = 0 WHERE user_id = ? AND is_active = 1').run(userId);
 
@@ -89,5 +148,5 @@ export function startWeeklyCron() {
     console.log('[cron] Weekly plan adaptation complete');
   });
 
-  console.log('[cron] Weekly adaptation scheduled: Sundays 22:00');
+  console.log('[cron] Weekly adaptation scheduled: Mondays 04:00');
 }
