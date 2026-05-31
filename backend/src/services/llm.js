@@ -231,9 +231,45 @@ function validatePlan(plan) {
   return true;
 }
 
+/**
+ * Deterministic safety net: the LLM is instructed to pick a training-day count
+ * within the user's [days_per_week_min, days_per_week_max] range, but occasionally
+ * overshoots. If it scheduled MORE training days than the user's weekly max, convert
+ * the lightest excess day(s) to rest and stash their exercises into _carryover so the
+ * work is preserved (the smart-shift and Monday-cron machinery already consume that
+ * field). If it scheduled fewer than the minimum, we only warn — fabricating extra
+ * training days mechanically would produce low-quality sessions.
+ */
+function enforceSessionCount(plan, profile) {
+  if (!profile) return;
+  const max = profile.days_per_week_max ?? profile.days_per_week;
+  const min = profile.days_per_week_min ?? profile.days_per_week;
+  const training = plan.days.filter(d => !d.is_rest);
+
+  if (max && training.length > max) {
+    const excess = training.length - max;
+    // Drop the lightest training days first so we shed the least programming value.
+    const toRest = [...training]
+      .sort((a, b) => (a.exercises?.length || 0) - (b.exercises?.length || 0))
+      .slice(0, excess);
+    const carry = plan._carryover || [];
+    for (const day of toRest) {
+      for (const ex of day.exercises || []) carry.push({ ...ex, carried_over: true });
+      day.is_rest = true;
+      day.name = 'Rest';
+      day.exercises = [];
+    }
+    if (carry.length) plan._carryover = carry;
+    console.warn(`[plan] training days ${training.length} > max ${max}; capped to ${max}, stashed ${carry.length} exercise(s) to carryover`);
+  } else if (min && training.length < min) {
+    console.warn(`[plan] training days ${training.length} < requested min ${min}; leaving as generated`);
+  }
+}
+
 export async function generatePlan(input) {
   const parsed = await callProvider(PLAN_SYSTEM_PROMPT, buildPlanPrompt(input));
   validatePlan(parsed);
+  enforceSessionCount(parsed, input?.profile);
   return parsed;
 }
 

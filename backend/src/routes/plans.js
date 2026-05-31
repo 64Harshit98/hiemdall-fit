@@ -86,7 +86,11 @@ router.post('/generate', requireAuth, async (req, res) => {
 
   const mode = req.body?.mode || 'initial';
   const withHistory = mode !== 'initial';
-  const recent_logs = withHistory ? getRecentLogs(req.user.id, 30) : null;
+  // Regenerate builds a fresh plan from the user's profile (goal, split
+  // preference, equipment, etc.) and their latest saved analysis report.
+  // The previous backlog of raw logs is intentionally neglected — the saved
+  // report already summarises recent performance and trends.
+  const recent_logs = null;
   const plan_history = withHistory ? getPlanHistory(req.user.id) : null;
   const latest_report = withHistory ? getLatestSavedReport(req.user.id) : null;
 
