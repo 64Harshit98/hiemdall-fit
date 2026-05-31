@@ -7,6 +7,7 @@ import authRouter from './routes/auth.js';
 import profileRouter from './routes/profile.js';
 import plansRouter from './routes/plans.js';
 import logsRouter from './routes/logs.js';
+import reportsRouter from './routes/reports.js';
 import { startWeeklyCron } from './services/cron.js';
 
 const app = express();
@@ -24,6 +25,7 @@ app.use('/api/auth', authRouter);
 app.use('/api/profile', profileRouter);
 app.use('/api/plans', plansRouter);
 app.use('/api/logs', logsRouter);
+app.use('/api/reports', reportsRouter);
 
 app.use((err, req, res, next) => {
   console.error(err);

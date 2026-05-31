@@ -46,4 +46,11 @@ export const api = {
     });
   },
   history: () => request('/logs/history'),
+
+  // reports
+  generateReport: (days) => request('/reports/generate', { method: 'POST', body: JSON.stringify({ days }) }),
+  listReports: () => request('/reports'),
+  saveReport: (id, note) => request(`/reports/${id}/save`, { method: 'POST', body: JSON.stringify({ save: true, note: note || null }) }),
+  unsaveReport: (id) => request(`/reports/${id}/save`, { method: 'POST', body: JSON.stringify({ save: false }) }),
+  deleteReport: (id) => request(`/reports/${id}`, { method: 'DELETE' }),
 };

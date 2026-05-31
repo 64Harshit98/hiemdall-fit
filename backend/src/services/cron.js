@@ -58,7 +58,17 @@ export function startWeeklyCron() {
           return { week_start: r.week_start, week_summary: p.week_summary };
         });
 
-        const plan = await generatePlan({ profile, recent_logs, plan_history, mode: 'weekly_adapt' });
+        const latestReportRow = db.prepare(`
+          SELECT report_json, user_note, date_range, created_at
+          FROM reports WHERE user_id = ? AND is_saved = 1
+          ORDER BY id DESC LIMIT 1
+        `).get(userId);
+        const latest_report = latestReportRow ? (() => {
+          const r = JSON.parse(latestReportRow.report_json);
+          return { date_range: latestReportRow.date_range, created_at: latestReportRow.created_at, user_note: latestReportRow.user_note || null, summary: r.summary, concerns: r.concerns, recommendations: r.recommendations };
+        })() : null;
+
+        const plan = await generatePlan({ profile, recent_logs, plan_history, latest_report, mode: 'weekly_adapt' });
 
         db.prepare('UPDATE plans SET is_active = 0 WHERE user_id = ? AND is_active = 1').run(userId);
 

@@ -85,6 +85,18 @@ CREATE TABLE IF NOT EXISTS day_completions (
   completed_at TEXT DEFAULT (datetime('now')),
   UNIQUE(plan_id, day_index)
 );
+
+CREATE TABLE IF NOT EXISTS reports (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  report_json TEXT NOT NULL,
+  date_range TEXT NOT NULL,
+  user_note TEXT,
+  is_saved INTEGER DEFAULT 0,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_reports_user ON reports(user_id, is_saved);
 `;
 
 db.exec(schema);

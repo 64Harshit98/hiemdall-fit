@@ -32,7 +32,7 @@ export default function Today() {
   }
 
   async function handleRegenerate() {
-    if (!confirm('Regenerate this week\'s plan from your recent logs? Today\'s logged sets stay saved.')) return;
+    if (!confirm('Regenerate this week\'s plan? Your recent logs and latest saved analysis report (if any) will be used. Today\'s logged sets stay saved.')) return;
     setRegenerating(true);
     try {
       await api.generatePlan('regenerate');

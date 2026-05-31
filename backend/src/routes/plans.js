@@ -47,6 +47,24 @@ function getPlanHistory(userId, limit = 5) {
   });
 }
 
+function getLatestSavedReport(userId) {
+  const row = db.prepare(`
+    SELECT report_json, user_note, date_range, created_at
+    FROM reports WHERE user_id = ? AND is_saved = 1
+    ORDER BY id DESC LIMIT 1
+  `).get(userId);
+  if (!row) return null;
+  const r = JSON.parse(row.report_json);
+  return {
+    date_range: row.date_range,
+    created_at: row.created_at,
+    user_note: row.user_note || null,
+    summary: r.summary,
+    concerns: r.concerns,
+    recommendations: r.recommendations,
+  };
+}
+
 function deactivateOldPlans(userId) {
   db.prepare('UPDATE plans SET is_active = 0 WHERE user_id = ? AND is_active = 1').run(userId);
 }
@@ -69,9 +87,10 @@ router.post('/generate', requireAuth, async (req, res) => {
   const withHistory = mode !== 'initial';
   const recent_logs = withHistory ? getRecentLogs(req.user.id, 30) : null;
   const plan_history = withHistory ? getPlanHistory(req.user.id) : null;
+  const latest_report = withHistory ? getLatestSavedReport(req.user.id) : null;
 
   try {
-    const plan = await generatePlan({ profile, recent_logs, plan_history, mode });
+    const plan = await generatePlan({ profile, recent_logs, plan_history, latest_report, mode });
 
     deactivateOldPlans(req.user.id);
     const result = db.prepare(`
