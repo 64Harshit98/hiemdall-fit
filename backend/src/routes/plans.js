@@ -231,18 +231,24 @@ router.post('/mark-rest', requireAuth, (req, res) => {
   // Snapshot the full week before mutating, so the shift can be reversed.
   parsed._rest_undo = {
     days: structuredClone(parsed.days),
-    carryover: parsed._carryover ? structuredClone(parsed._carryover) : null,
+    carryover_days: parsed._carryover_days ? structuredClone(parsed._carryover_days) : null,
   };
 
   const last = parsed.days.length - 1;
   const tail = structuredClone(parsed.days.slice(idx)); // [old idx, old idx+1, ...]
   const restDay = { day_index: idx, name: 'Rest', is_rest: true, exercises: [] };
 
-  // The content originally at the last position overflows when we shift down.
+  // The content originally at the last position overflows when we shift down —
+  // retain it as a WHOLE carried day so it can be re-stacked at the next reset.
   const overflow = tail[last - idx];
   if (overflow && !overflow.is_rest && Array.isArray(overflow.exercises) && overflow.exercises.length) {
-    if (!parsed._carryover) parsed._carryover = [];
-    parsed._carryover.push(...overflow.exercises.map(ex => ({ ...ex, carried_over: true })));
+    if (!parsed._carryover_days) parsed._carryover_days = [];
+    parsed._carryover_days.push({
+      name: overflow.name,
+      is_rest: false,
+      exercises: overflow.exercises.map(ex => ({ ...ex, carried_over: true })),
+      carried_over: true,
+    });
   }
 
   // Cascade: rest at idx, each old day moves one slot later.
@@ -272,8 +278,8 @@ router.post('/unmark-rest', requireAuth, (req, res) => {
   if (!parsed._rest_undo) return res.status(400).json({ error: 'nothing to undo' });
 
   parsed.days = parsed._rest_undo.days;
-  if (parsed._rest_undo.carryover) parsed._carryover = parsed._rest_undo.carryover;
-  else delete parsed._carryover;
+  if (parsed._rest_undo.carryover_days) parsed._carryover_days = parsed._rest_undo.carryover_days;
+  else delete parsed._carryover_days;
   delete parsed._rest_undo;
 
   db.prepare('UPDATE plans SET plan_json = ? WHERE id = ?')

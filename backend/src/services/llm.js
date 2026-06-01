@@ -64,7 +64,8 @@ Rules:
 - Respect dislikes; favor liked exercises where biomechanically sensible.
 - Progressive overload aware: when recent_logs are provided, increase load/reps modestly on lifts where the user hit prescribed reps comfortably; deload (~10%) on lifts where reps were missed or pain was noted.
 - plan_history contains week_summary strings from previous plans. Use these to avoid repeating the same weekly structure back-to-back, identify longer-term progression trends, and vary exercise selection meaningfully across weeks.
-- If latest_report is provided (a saved analysis snapshot), treat its concerns and recommendations as high-priority inputs when structuring the new plan. Address identified concerns directly in the programme. The week_summary MUST explicitly state which report recommendations were applied.`;
+- If latest_report is provided (a saved analysis snapshot), treat its concerns and recommendations as high-priority inputs when structuring the new plan. Address identified concerns directly in the programme. The week_summary MUST explicitly state which report recommendations were applied.
+- carry_forward, when provided, lists workouts being prepended to the START of this week from unfinished prior work; they will appear as their own training day(s) before the days you generate. Do NOT re-program these exercises in your output. Account for the extra early-week volume and fatigue when structuring the remaining days (e.g. avoid stacking the same muscle groups immediately after the carried-over work), and the week_summary should briefly note that carried-over work opens the week.`;
 
 // ─── Report system prompt ──────────────────────────────────────────────────────
 
@@ -200,13 +201,14 @@ async function callProvider(systemPrompt, userContent) {
 
 // ─── Plan generation ───────────────────────────────────────────────────────────
 
-function buildPlanPrompt({ profile, recent_logs, plan_history, latest_report, mode }) {
+function buildPlanPrompt({ profile, recent_logs, plan_history, latest_report, carry_forward, mode }) {
   return JSON.stringify({
     mode: mode || 'initial',
     profile,
     recent_logs: recent_logs || null,
     plan_history: plan_history || null,
     latest_report: latest_report || null,
+    carry_forward: carry_forward || null,
   });
 }
 
@@ -252,15 +254,22 @@ function enforceSessionCount(plan, profile) {
     const toRest = [...training]
       .sort((a, b) => (a.exercises?.length || 0) - (b.exercises?.length || 0))
       .slice(0, excess);
-    const carry = plan._carryover || [];
+    const carry = plan._carryover_days || [];
     for (const day of toRest) {
-      for (const ex of day.exercises || []) carry.push({ ...ex, carried_over: true });
+      if ((day.exercises || []).length) {
+        carry.push({
+          name: day.name,
+          is_rest: false,
+          exercises: day.exercises.map(ex => ({ ...ex, carried_over: true })),
+          carried_over: true,
+        });
+      }
       day.is_rest = true;
       day.name = 'Rest';
       day.exercises = [];
     }
-    if (carry.length) plan._carryover = carry;
-    console.warn(`[plan] training days ${training.length} > max ${max}; capped to ${max}, stashed ${carry.length} exercise(s) to carryover`);
+    if (carry.length) plan._carryover_days = carry;
+    console.warn(`[plan] training days ${training.length} > max ${max}; capped to ${max}, stashed ${carry.length} day(s) to carryover`);
   } else if (min && training.length < min) {
     console.warn(`[plan] training days ${training.length} < requested min ${min}; leaving as generated`);
   }

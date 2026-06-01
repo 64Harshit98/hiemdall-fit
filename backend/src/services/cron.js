@@ -3,20 +3,23 @@ import db from '../db/index.js';
 import { generatePlan } from './llm.js';
 
 /**
- * Compute exercises that were prescribed but not fully completed in a plan.
- * Returns a deduped (by name) array shaped like plan exercises, each tagged
- * carried_over:true. Combines per-day shortfalls with any overflow stashed in
- * _carryover by a smart-shifted rest day.
+ * Compute the WHOLE DAYS that were not fully completed in a plan, so they can be
+ * carried forward as their own day(s) (a "stack") rather than merged onto one day.
+ *
+ * Returns an array of day objects shaped like plan days, in day order:
+ *   { name, is_rest:false, exercises:[...remaining], carried_over:true }
+ * For each non-rest day we keep only the exercises with sets still owing
+ * (prescribed sets minus logged sets). Days fully completed are dropped. Also
+ * appends any whole days already stashed in _carryover_days (rolled over from a
+ * previous reset or a smart-shifted rest day), plus a back-compat wrap of any
+ * legacy loose _carryover exercises into a single carried day.
  */
-function getUnfinishedExercises(planId, parsed) {
-  const byName = new Map(); // name -> exercise entry (keep larger remaining sets)
-  const add = (ex) => {
-    const existing = byName.get(ex.name);
-    if (!existing || (ex.sets || 0) > (existing.sets || 0)) byName.set(ex.name, ex);
-  };
+function getUnfinishedDays(planId, parsed) {
+  const days = [];
 
   for (const day of parsed.days || []) {
     if (day.is_rest || !Array.isArray(day.exercises)) continue;
+    const remainingExercises = [];
     for (const ex of day.exercises) {
       const { count } = db.prepare(`
         SELECT COUNT(*) AS count FROM workout_logs
@@ -24,23 +27,30 @@ function getUnfinishedExercises(planId, parsed) {
       `).get(planId, day.day_index, ex.name);
       const remaining = (ex.sets || 0) - count;
       if (remaining > 0) {
-        add({
-          name: ex.name,
-          sets: remaining,
-          reps: ex.reps,
-          target_weight: ex.target_weight,
-          rest_seconds: ex.rest_seconds,
-          form_tip: ex.form_tip,
-          alternate_exercise: ex.alternate_exercise,
-          carried_over: true,
-        });
+        remainingExercises.push({ ...ex, sets: remaining, carried_over: true });
       }
+    }
+    if (remainingExercises.length) {
+      days.push({ name: day.name, is_rest: false, exercises: remainingExercises, carried_over: true });
     }
   }
 
-  for (const ex of parsed._carryover || []) add({ ...ex, carried_over: true });
+  // Whole days rolled over from a previous reset / smart-shifted rest day.
+  for (const d of parsed._carryover_days || []) {
+    days.push({ name: d.name, is_rest: false, exercises: d.exercises, carried_over: true });
+  }
 
-  return [...byName.values()];
+  // Back-compat: legacy loose-exercise carryover → wrap into one carried day.
+  if (Array.isArray(parsed._carryover) && parsed._carryover.length) {
+    days.push({
+      name: 'Carried over',
+      is_rest: false,
+      exercises: parsed._carryover.map(ex => ({ ...ex, carried_over: true })),
+      carried_over: true,
+    });
+  }
+
+  return days;
 }
 
 /**
@@ -111,23 +121,40 @@ export function startWeeklyCron() {
           return { date_range: latestReportRow.date_range, created_at: latestReportRow.created_at, user_note: latestReportRow.user_note || null, summary: r.summary, concerns: r.concerns, recommendations: r.recommendations };
         })() : null;
 
-        // Capture the outgoing plan so we can carry forward unfinished work.
+        // Capture the outgoing plan so we can carry forward unfinished WHOLE DAYS.
         const outgoing = db.prepare(`
           SELECT id, plan_json FROM plans
           WHERE user_id = ? AND is_active = 1
           ORDER BY id DESC LIMIT 1
         `).get(userId);
-        const carryover = outgoing
-          ? getUnfinishedExercises(outgoing.id, JSON.parse(outgoing.plan_json))
+        const carriedDays = outgoing
+          ? getUnfinishedDays(outgoing.id, JSON.parse(outgoing.plan_json))
           : [];
 
-        const plan = await generatePlan({ profile, recent_logs, plan_history, latest_report, mode: 'weekly_adapt' });
+        // Inform the LLM of the carried volume so the new week adapts (and does
+        // not re-program the same exercises that we'll prepend as whole days).
+        const carry_forward = carriedDays.length
+          ? carriedDays.flatMap(d => d.exercises.map(e => ({ name: e.name, sets: e.sets, reps: e.reps })))
+          : null;
 
-        // Strict-add: append unfinished exercises onto the first training day.
-        if (carryover.length) {
-          const firstTrainingDay = plan.days.find(d => !d.is_rest && Array.isArray(d.exercises));
-          if (firstTrainingDay) firstTrainingDay.exercises.push(...carryover);
-        }
+        // If carried-over work already fills (or overflows) the whole week, the
+        // generated plan would be entirely discarded — skip the LLM call.
+        const plan = carriedDays.length >= 7
+          ? { week_summary: 'Catching up on carried-over work from last week.', days: [] }
+          : await generatePlan({ profile, recent_logs, plan_history, latest_report, carry_forward, mode: 'weekly_adapt' });
+
+        // Stack: prepend carried days, shift the generated week back, keep 7 days.
+        const combined = [...carriedDays, ...plan.days];
+        plan.days = combined.slice(0, 7).map((d, i) => ({ ...d, day_index: i }));
+
+        // FIFO roll-over: only genuinely-unfinished days that overflow past day 7
+        // roll to the next reset (the bumped-off fresh tail is regenerated then).
+        // Merge with any days enforceSessionCount already stashed on the new plan.
+        const overflowCarried = combined.slice(7).filter(d => d.carried_over);
+        const rolled = [...(plan._carryover_days || []), ...overflowCarried]
+          .map(({ day_index, ...d }) => d);
+        if (rolled.length) plan._carryover_days = rolled;
+        else delete plan._carryover_days;
 
         db.prepare('UPDATE plans SET is_active = 0 WHERE user_id = ? AND is_active = 1').run(userId);
 

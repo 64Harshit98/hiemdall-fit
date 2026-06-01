@@ -69,11 +69,6 @@ export default function ExerciseRow({ exercise, planId, dayIndex, existingLogs, 
         <div>
           <div className="exercise-name">
             {exercise.name}
-            {exercise.carried_over && (
-              <span className="tag" style={{ marginLeft: '0.5rem', fontSize: '0.7rem', borderColor: 'var(--accent-dim)', color: 'var(--accent)' }}>
-                ↻ carried over
-              </span>
-            )}
           </div>
           <div className="exercise-prescription">
             {exercise.sets} × {exercise.reps}
