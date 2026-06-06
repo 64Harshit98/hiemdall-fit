@@ -119,6 +119,9 @@ if (!profileCols.includes('session_duration_minutes')) {
 if (!profileCols.includes('split_preference')) {
   db.exec('ALTER TABLE profiles ADD COLUMN split_preference TEXT');
 }
+if (!profileCols.includes('include_mobility')) {
+  db.exec('ALTER TABLE profiles ADD COLUMN include_mobility INTEGER DEFAULT 0');
+}
 
 // Backfill min/max from the legacy days_per_week for existing rows
 db.prepare(`

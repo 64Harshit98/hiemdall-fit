@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react';
 import { api } from '../lib/api.js';
 
-export default function ExerciseRow({ exercise, planId, dayIndex, existingLogs, isComplete, onLogged, readOnly = false }) {
-  const [open, setOpen] = useState(readOnly ? false : !isComplete);
+export default function ExerciseRow({ exercise, planId, dayIndex, existingLogs, isComplete, onLogged, readOnly = false, skipped = false }) {
+  const [open, setOpen] = useState(readOnly || skipped ? false : !isComplete);
   const [sets, setSets] = useState([]);
   const [notes, setNotes] = useState('');
   const [savingIdx, setSavingIdx] = useState(null);
   const [swapping, setSwapping] = useState(false);
+  const [skipping, setSkipping] = useState(false);
 
   // Initialise sets state from existing logs, padding to exercise.sets
   useEffect(() => {
@@ -63,12 +64,29 @@ export default function ExerciseRow({ exercise, planId, dayIndex, existingLogs, 
     }
   }
 
+  async function handleSkip(e) {
+    e.stopPropagation();
+    if (skipping) return;
+    setSkipping(true);
+    try {
+      await api.skipExercise(exercise.name);
+      onLogged(); // reloads so skipped state + day completion update
+    } catch (err) {
+      alert('Skip failed: ' + err.message);
+    } finally {
+      setSkipping(false);
+    }
+  }
+
   return (
-    <div className={`exercise ${isComplete ? 'done' : ''}`}>
-      <div className="exercise-head" onClick={() => setOpen(!open)}>
+    <div className={`exercise ${isComplete ? 'done' : ''} ${skipped ? 'skipped' : ''}`} style={skipped ? { opacity: 0.6 } : undefined}>
+      <div className="exercise-head" onClick={() => { if (!skipped) setOpen(!open); }}>
         <div>
-          <div className="exercise-name">
+          <div className="exercise-name" style={skipped ? { textDecoration: 'line-through' } : undefined}>
             {exercise.name}
+            {skipped && (
+              <span className="tag" style={{ marginLeft: '0.5rem', fontSize: '0.7rem' }}>skipped</span>
+            )}
           </div>
           <div className="exercise-prescription">
             {exercise.sets} × {exercise.reps}
@@ -76,8 +94,15 @@ export default function ExerciseRow({ exercise, planId, dayIndex, existingLogs, 
             {exercise.rest_seconds ? ` · rest ${exercise.rest_seconds}s` : ''}
           </div>
         </div>
-        <div className="muted small">{isComplete && !readOnly ? '✓' : open ? '▾' : '▸'}</div>
+        <div className="muted small">{skipped ? '–' : isComplete && !readOnly ? '✓' : open ? '▾' : '▸'}</div>
       </div>
+
+      {skipped && !readOnly && (
+        <button type="button" className="ghost small" style={{ marginTop: '0.5rem' }}
+                onClick={handleSkip} disabled={skipping}>
+          {skipping ? '…' : '↩ Unskip exercise'}
+        </button>
+      )}
 
       {exercise.form_tip && open && (
         <div className="form-tip">{exercise.form_tip}</div>
@@ -109,7 +134,7 @@ export default function ExerciseRow({ exercise, planId, dayIndex, existingLogs, 
         )
       )}
 
-      {open && !readOnly && (
+      {open && !readOnly && !skipped && (
         <div style={{ marginTop: '0.75rem' }}>
           <div className="set-grid">
             <div className="set-label">set</div>
@@ -167,6 +192,10 @@ export default function ExerciseRow({ exercise, planId, dayIndex, existingLogs, 
             onBlur={() => { if (notes !== '') saveSet(0); }}
             style={{ marginTop: '0.5rem', fontSize: '0.85rem' }}
           />
+          <button type="button" className="ghost small danger" style={{ marginTop: '0.5rem' }}
+                  onClick={handleSkip} disabled={skipping}>
+            {skipping ? '…' : 'Skip this exercise'}
+          </button>
         </div>
       )}
     </div>

@@ -15,6 +15,7 @@ router.get('/', requireAuth, (req, res) => {
     days_per_week_min: min,
     days_per_week_max: max,
     session_duration_minutes: row.session_duration_minutes ?? 60,
+    include_mobility: !!row.include_mobility,
     equipment: JSON.parse(row.equipment_json || '[]'),
     preferences: JSON.parse(row.preferences_json || '{}'),
   });
@@ -25,7 +26,7 @@ router.put('/', requireAuth, (req, res) => {
     age, height, weight, experience, goal,
     days_per_week_min, days_per_week_max,
     session_duration_minutes,
-    injuries, equipment, preferences, additional_activities, split_preference,
+    injuries, equipment, preferences, additional_activities, split_preference, include_mobility,
   } = req.body || {};
 
   if (!age || !height || !weight || !experience || !goal || !days_per_week_min || !days_per_week_max) {
@@ -44,8 +45,8 @@ router.put('/', requireAuth, (req, res) => {
   const preferencesJson = JSON.stringify(preferences || {});
 
   db.prepare(`
-    INSERT INTO profiles (user_id, age, height, weight, experience, goal, days_per_week, days_per_week_min, days_per_week_max, session_duration_minutes, injuries, equipment_json, preferences_json, additional_activities, split_preference, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+    INSERT INTO profiles (user_id, age, height, weight, experience, goal, days_per_week, days_per_week_min, days_per_week_max, session_duration_minutes, injuries, equipment_json, preferences_json, additional_activities, split_preference, include_mobility, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
     ON CONFLICT(user_id) DO UPDATE SET
       age = excluded.age,
       height = excluded.height,
@@ -61,8 +62,9 @@ router.put('/', requireAuth, (req, res) => {
       preferences_json = excluded.preferences_json,
       additional_activities = excluded.additional_activities,
       split_preference = excluded.split_preference,
+      include_mobility = excluded.include_mobility,
       updated_at = datetime('now')
-  `).run(req.user.id, age, height, weight, experience, goal, max, min, max, session_duration_minutes || 60, injuries || '', equipmentJson, preferencesJson, additional_activities || '', split_preference || '');
+  `).run(req.user.id, age, height, weight, experience, goal, max, min, max, session_duration_minutes || 60, injuries || '', equipmentJson, preferencesJson, additional_activities || '', split_preference || '', include_mobility ? 1 : 0);
 
   res.json({ ok: true });
 });

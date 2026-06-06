@@ -47,6 +47,7 @@ export default function Profile() {
       injuries: p.injuries,
       additional_activities: p.additional_activities,
       split_preference: p.split_preference,
+      include_mobility: !!p.include_mobility,
       equipment: p.equipment,
       preferences: p.preferences,
     };
@@ -196,6 +197,17 @@ export default function Profile() {
         </div>
         <div className="muted" style={{ fontSize: '0.78rem', marginTop: '0.35rem' }}>
           Free text — tell the coach how you like to organise your week. Tap a suggestion or write your own. Leave blank and the coach picks the best split for your training days.
+        </div>
+      </div>
+
+      <div className="card" style={{ marginTop: '0.75rem' }}>
+        <label className="row between" style={{ cursor: 'pointer', alignItems: 'center' }}>
+          <span>include mobility work</span>
+          <input type="checkbox" checked={!!p.include_mobility}
+                 onChange={e => update('include_mobility', e.target.checked)} />
+        </label>
+        <div className="muted" style={{ fontSize: '0.78rem', marginTop: '0.35rem' }}>
+          When on, each training day adds a dynamic warm-up and stretching/mobility drills. Applies to your next generated or regenerated plan.
         </div>
       </div>
 

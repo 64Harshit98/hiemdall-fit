@@ -30,7 +30,9 @@ export const api = {
   advanceDay: () => request('/plans/advance', { method: 'POST' }),
   markRestDay: () => request('/plans/mark-rest', { method: 'POST' }),
   unmarkRestDay: () => request('/plans/unmark-rest', { method: 'POST' }),
+  convertRestToWorkout: () => request('/plans/convert-to-workout', { method: 'POST' }),
   swapExercise: (exerciseName) => request('/plans/swap-exercise', { method: 'POST', body: JSON.stringify({ exercise_name: exerciseName }) }),
+  skipExercise: (exerciseName) => request('/plans/skip-exercise', { method: 'POST', body: JSON.stringify({ exercise_name: exerciseName }) }),
   planHistory: () => request('/plans/history'),
 
   // logs

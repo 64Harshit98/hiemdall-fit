@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import db from '../db/index.js';
 import { requireAuth } from '../middleware/auth.js';
-import { generatePlan } from '../services/llm.js';
+import { generatePlan, generateMobilitySession } from '../services/llm.js';
 
 const router = Router();
 
@@ -23,6 +23,7 @@ function getProfile(userId) {
     preferences: JSON.parse(row.preferences_json || '{}'),
     additional_activities: row.additional_activities || '',
     split_preference: row.split_preference || '',
+    include_mobility: !!row.include_mobility,
   };
 }
 
@@ -328,6 +329,93 @@ router.post('/swap-exercise', requireAuth, (req, res) => {
 
   db.prepare('UPDATE plans SET plan_json = ? WHERE id = ?').run(JSON.stringify(parsed), plan.id);
   res.json({ ok: true, name: alt.name });
+});
+
+/**
+ * Skip (or un-skip) an exercise on the current day. Skipped exercises don't block
+ * marking the day done and are not carried forward to next week. Toggles, so the
+ * user can undo a skip.
+ */
+router.post('/skip-exercise', requireAuth, (req, res) => {
+  const { exercise_name } = req.body || {};
+  if (!exercise_name) return res.status(400).json({ error: 'exercise_name required' });
+
+  const plan = db.prepare(`
+    SELECT id, plan_json, current_day_index FROM plans
+    WHERE user_id = ? AND is_active = 1
+    ORDER BY id DESC LIMIT 1
+  `).get(req.user.id);
+  if (!plan) return res.status(404).json({ error: 'no active plan' });
+
+  const parsed = JSON.parse(plan.plan_json);
+  const day = parsed.days[plan.current_day_index];
+  if (!day || day.is_rest || !Array.isArray(day.exercises)) {
+    return res.status(400).json({ error: 'no exercises on the current day' });
+  }
+
+  const ex = day.exercises.find(e => e.name === exercise_name);
+  if (!ex) return res.status(404).json({ error: 'exercise not found on the current day' });
+
+  ex.skipped = !ex.skipped;
+
+  db.prepare('UPDATE plans SET plan_json = ? WHERE id = ?').run(JSON.stringify(parsed), plan.id);
+  res.json({ ok: true, skipped: ex.skipped });
+});
+
+/**
+ * Convert the current REST day into a workout day. Pulls the nearest upcoming
+ * workout day's session into today (that source day then becomes the rest day,
+ * preserving the weekly session count). If there is no remaining workout day this
+ * week, generate a light mobility / active-recovery session via the LLM instead.
+ */
+router.post('/convert-to-workout', requireAuth, async (req, res) => {
+  const plan = db.prepare(`
+    SELECT id, plan_json, current_day_index FROM plans
+    WHERE user_id = ? AND is_active = 1
+    ORDER BY id DESC LIMIT 1
+  `).get(req.user.id);
+  if (!plan) return res.status(404).json({ error: 'no active plan' });
+
+  const parsed = JSON.parse(plan.plan_json);
+  const idx = plan.current_day_index;
+  const day = parsed.days[idx];
+
+  if (!day || !day.is_rest) {
+    return res.status(400).json({ error: 'this day is already a workout day' });
+  }
+
+  // Find the nearest upcoming workout day in the week.
+  let j = -1;
+  for (let p = idx + 1; p < parsed.days.length; p++) {
+    const d = parsed.days[p];
+    if (d && !d.is_rest && Array.isArray(d.exercises) && d.exercises.length) { j = p; break; }
+  }
+
+  // Converting clears any stale rest-undo snapshot tied to this day.
+  if (parsed._rest_undo) delete parsed._rest_undo;
+
+  let source;
+  if (j !== -1) {
+    // Pull the upcoming workout back to today; vacate its slot to a rest day.
+    const src = parsed.days[j];
+    parsed.days[idx] = { day_index: idx, name: src.name, is_rest: false, exercises: structuredClone(src.exercises) };
+    parsed.days[j] = { day_index: j, name: 'Rest', is_rest: true, exercises: [] };
+    source = 'pulled';
+  } else {
+    // No workout day left this week — generate a mobility / recovery session.
+    try {
+      const profile = getProfile(req.user.id);
+      const mobility = await generateMobilitySession({ profile });
+      parsed.days[idx] = { day_index: idx, name: mobility.name || 'Mobility & Recovery', is_rest: false, exercises: mobility.exercises };
+      source = 'mobility';
+    } catch (e) {
+      console.error('Mobility generation failed:', e);
+      return res.status(502).json({ error: 'mobility generation failed', detail: e.message });
+    }
+  }
+
+  db.prepare('UPDATE plans SET plan_json = ? WHERE id = ?').run(JSON.stringify(parsed), plan.id);
+  res.json({ current_day_index: idx, source });
 });
 
 /** History: list past plans and weekly summaries. */

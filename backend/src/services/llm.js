@@ -56,6 +56,7 @@ Rules:
     • 6 training days → push/pull/legs ×2, OR an upper/lower ×3, OR a body-part split. Push/pull/legs is acceptable here but is only ONE valid choice — vary it across weeks.
   Push/pull/legs is appropriate ONLY at 5-6 days and should never be the automatic choice. For 2-4 day weeks, full-body and upper/lower are strongly preferred because they hit each muscle group more frequently. Pick the split that best serves the user's stated goal, experience level, and additional_activities; the week_summary MUST name the split you chose and briefly justify why it fits the training frequency and goal.
 - Session structure (MANDATORY): every non-rest day MUST follow a compound-first approach. Lead with 1-2 primary compound movements from the fundamental patterns (squat, hip hinge/deadlift, horizontal push, horizontal pull, vertical push, vertical pull) then follow with 3-5 accessory/supplementary exercises that target the same muscle groups or address weak points. Never programme fewer than 5 exercises on a training day. Aim for 6-8 exercises for sessions of 60 minutes or longer.
+- include_mobility: when true, every training day MUST include dedicated mobility work — 1-2 dynamic warm-up/activation movements at the START and 1-2 static stretches or mobility drills at the END of the session (in addition to the main exercises), targeting the muscle groups trained that day. Keep these low-intensity (bodyweight, "30-60s" or "10 each side" style prescriptions). When false, do not add separate mobility exercises. This adds to, and may slightly extend, the session within the time budget below.
 - session_duration_minutes tells you how long the user can train. Scale volume to fit within that window: ~30 min → 4-5 exercises, 2-3 sets each, short rest; ~45 min → 5-6 exercises, 3 sets; ~60 min → 6-7 exercises, 3-4 sets; ~75 min → 7-8 exercises, 3-4 sets; ~90 min+ → 8-9 exercises, 4-5 sets. Set rest_seconds shorter for time-limited sessions (60-90s) and longer for heavy strength work (120-180s).
 - additional_activities lists physical activity the user does outside the gym (e.g. "cycling commute, weekend football, climbing twice a week"). Factor this into the programme: reduce gym conditioning work if the user already accumulates significant cardio; avoid prescribing exercises that heavily overlap muscle groups already fatigued by their sport (e.g. reduce upper-body pulling volume if the user climbs regularly; avoid heavy leg work the day before a long run). The week_summary MUST explicitly mention how the additional activities were considered and what programming decisions they influenced (or state "no additional activities" if the field is empty).
 - Every exercise MUST include an alternate_exercise with a different movement that trains the same pattern or muscle group. Pick a genuinely useful swap — different equipment, lower skill demand, or joint-friendlier variation (e.g. bench press → dumbbell press; barbell squat → goblet squat; pull-up → lat pulldown).
@@ -279,6 +280,50 @@ export async function generatePlan(input) {
   const parsed = await callProvider(PLAN_SYSTEM_PROMPT, buildPlanPrompt(input));
   validatePlan(parsed);
   enforceSessionCount(parsed, input?.profile);
+  return parsed;
+}
+
+// ─── Mobility session generation ─────────────────────────────────────────────────
+
+const MOBILITY_SYSTEM_PROMPT = `You are an expert strength and conditioning coach.
+A user on a rest day wants light movement instead, and there is no remaining workout day this week to pull forward.
+Generate a SINGLE mobility / active-recovery session as STRICT JSON only. No prose, no markdown, no code fences.
+
+Output schema:
+{
+  "name": string (e.g. "Mobility & Recovery"),
+  "exercises": [
+    {
+      "name": string,
+      "sets": integer,
+      "reps": string (e.g. "30s hold" or "10 each side"),
+      "target_weight": string (usually "bodyweight"),
+      "rest_seconds": integer,
+      "form_tip": string (one short sentence),
+      "alternate_exercise": { "name": string, "note": string }
+    }
+  ]
+}
+
+Rules:
+- Programme 5-7 gentle mobility, stretching, or activation movements — NOT heavy strength work. Keep it low-intensity and recovery-focused.
+- Respect injuries: never prescribe contraindicated movements; gently address the user's restricted areas where appropriate.
+- Use minimal or no equipment regardless of what the user owns.
+- Every exercise MUST include an alternate_exercise (an easier or equipment-free variation).`;
+
+function validateMobility(m) {
+  if (!m || typeof m !== 'object') throw new Error('Mobility session is not an object');
+  if (!Array.isArray(m.exercises) || m.exercises.length === 0) throw new Error('mobility.exercises must be a non-empty array');
+  for (const ex of m.exercises) {
+    if (!ex.name || typeof ex.sets !== 'number' || !ex.reps) throw new Error(`mobility exercise malformed: ${JSON.stringify(ex)}`);
+  }
+  return true;
+}
+
+export async function generateMobilitySession({ profile }) {
+  const parsed = await callProvider(MOBILITY_SYSTEM_PROMPT, JSON.stringify({ profile: profile || null }));
+  validateMobility(parsed);
+  if (!parsed.name) parsed.name = 'Mobility & Recovery';
   return parsed;
 }
 

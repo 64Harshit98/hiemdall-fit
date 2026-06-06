@@ -8,6 +8,7 @@ export default function Today() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState(null);
   const [regenerating, setRegenerating] = useState(false);
+  const [converting, setConverting] = useState(false);
   // null = follow the server's current day; a number = previewing that day
   const [viewDay, setViewDay] = useState(null);
 
@@ -47,6 +48,18 @@ export default function Today() {
   async function handleUnmarkRest() {
     await api.unmarkRestDay();
     backToCurrent();
+  }
+
+  async function handleConvertToWorkout() {
+    setConverting(true);
+    try {
+      await api.convertRestToWorkout();
+      backToCurrent();
+    } catch (e) {
+      alert('Could not convert to a workout day: ' + e.message);
+    } finally {
+      setConverting(false);
+    }
   }
 
   async function handleRegenerate() {
@@ -90,7 +103,9 @@ export default function Today() {
       if (setsLogged >= ex.sets) completedExercises.add(ex.name);
     }
   }
-  const allDone = today && !today.is_rest && completedExercises.size === today.exercises.length;
+  // A day is done when every exercise is either fully logged or skipped.
+  const allDone = today && !today.is_rest &&
+    today.exercises.every(ex => completedExercises.has(ex.name) || ex.skipped);
 
   return (
     <>
@@ -168,6 +183,17 @@ export default function Today() {
           )}
 
           {is_current && (
+            <div style={{ marginTop: '1.5rem' }}>
+              <button className="ghost small" onClick={handleConvertToWorkout} disabled={converting}>
+                {converting ? <span className="spinner" /> : '🏋 Make it a workout day'}
+              </button>
+              <p className="muted small" style={{ margin: '0.6rem 0 0' }}>
+                Pulls your next workout forward — or a light mobility session if none is left this week.
+              </p>
+            </div>
+          )}
+
+          {is_current && (
             <button className="primary" style={{ marginTop: '2rem' }} onClick={handleAdvance}>
               Mark done → next day
             </button>
@@ -183,6 +209,7 @@ export default function Today() {
               dayIndex={viewing_day_index}
               existingLogs={logs.filter(l => l.exercise_name === ex.name)}
               isComplete={completedExercises.has(ex.name)}
+              skipped={!!ex.skipped}
               onLogged={load}
               readOnly={!is_current}
             />

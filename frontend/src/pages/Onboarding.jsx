@@ -26,6 +26,7 @@ const initial = {
   injuries: '',
   additional_activities: '',
   split_preference: '',
+  include_mobility: false,
   equipment: ['bodyweight only'],
   preferences: { liked: '', disliked: '' },
 };
@@ -209,6 +210,17 @@ export default function Onboarding({ onDone }) {
                     onChange={e => dispatch({ type: 'set', key: 'additional_activities', value: e.target.value })} />
           <div className="muted" style={{ fontSize: '0.78rem', marginTop: '0.35rem' }}>
             Your coach uses this to balance total load — fewer conditioning days if you're already active, and avoids fatiguing the same muscle groups used in your sport.
+          </div>
+        </div>
+
+        <div className="card">
+          <label className="row between" style={{ cursor: 'pointer', alignItems: 'center' }}>
+            <span>include mobility work</span>
+            <input type="checkbox" checked={state.include_mobility}
+                   onChange={e => dispatch({ type: 'set', key: 'include_mobility', value: e.target.checked })} />
+          </label>
+          <div className="muted" style={{ fontSize: '0.78rem', marginTop: '0.35rem' }}>
+            Adds dynamic warm-up and stretching/mobility drills to each training day.
           </div>
         </div>
 

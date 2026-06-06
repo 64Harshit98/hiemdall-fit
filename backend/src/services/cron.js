@@ -21,6 +21,7 @@ function getUnfinishedDays(planId, parsed) {
     if (day.is_rest || !Array.isArray(day.exercises)) continue;
     const remainingExercises = [];
     for (const ex of day.exercises) {
+      if (ex.skipped) continue; // user chose to skip — don't carry it forward
       const { count } = db.prepare(`
         SELECT COUNT(*) AS count FROM workout_logs
         WHERE plan_id = ? AND day_index = ? AND exercise_name = ?
@@ -88,6 +89,7 @@ export function startWeeklyCron() {
           preferences: JSON.parse(profileRow.preferences_json || '{}'),
           additional_activities: profileRow.additional_activities || '',
           split_preference: profileRow.split_preference || '',
+          include_mobility: !!profileRow.include_mobility,
         };
 
         const recent_logs = db.prepare(`
