@@ -6,6 +6,7 @@ import Onboarding from './pages/Onboarding.jsx';
 import Today from './pages/Today.jsx';
 import History from './pages/History.jsx';
 import Profile from './pages/Profile.jsx';
+import Admin from './pages/Admin.jsx';
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -50,8 +51,8 @@ export default function App() {
     );
   }
 
-  // Logged in but no profile → force onboarding
-  if (!user.has_profile && location.pathname !== '/onboarding') {
+  // Logged in but no profile → force onboarding (admins skip onboarding)
+  if (!user.has_profile && !user.is_admin && location.pathname !== '/onboarding') {
     return <Navigate to="/onboarding" replace />;
   }
 
@@ -67,6 +68,7 @@ export default function App() {
               <NavLink to="/" end>Today</NavLink>
               <NavLink to="/history">History</NavLink>
               <NavLink to="/profile">Profile</NavLink>
+              {user.is_admin && <NavLink to="/admin">Admin</NavLink>}
             </div>
             <button className="ghost small" onClick={handleLogout} style={{ padding: '0.3rem 0.7rem', fontSize: '0.8rem' }}>
               {user.username} ↗
@@ -81,6 +83,7 @@ export default function App() {
           <Route path="/onboarding" element={<Onboarding onDone={refresh} />} />
           <Route path="/history" element={<History />} />
           <Route path="/profile" element={<Profile />} />
+          {user.is_admin && <Route path="/admin" element={<Admin />} />}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>

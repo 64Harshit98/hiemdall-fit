@@ -3,55 +3,45 @@ import db from '../db/index.js';
 import { generatePlan } from './llm.js';
 
 /**
- * Compute the WHOLE DAYS that were not fully completed in a plan, so they can be
- * carried forward as their own day(s) (a "stack") rather than merged onto one day.
+ * Compute the flat, deduped list of exercises the user still OWES from the
+ * outgoing plan — the work to fold into next week. The LLM receives this and
+ * schedules it into a balanced week itself (it owns the day/rest layout), so we
+ * no longer manipulate days mechanically here.
  *
- * Returns an array of day objects shaped like plan days, in day order:
- *   { name, is_rest:false, exercises:[...remaining], carried_over:true }
- * For each non-rest day we keep only the exercises with sets still owing
- * (prescribed sets minus logged sets). Days fully completed are dropped. Also
- * appends any whole days already stashed in _carryover_days (rolled over from a
- * previous reset or a smart-shifted rest day), plus a back-compat wrap of any
- * legacy loose _carryover exercises into a single carried day.
+ * For each non-rest day we count logged sets and keep the shortfall; skipped
+ * exercises are ignored. We also fold in any exercises stashed in _carryover_days
+ * (rest-day overflow / session-cap) and legacy loose _carryover. Deduped by name,
+ * keeping the larger remaining set count.
  */
-function getUnfinishedDays(planId, parsed) {
-  const days = [];
+function getCarryForwardExercises(planId, parsed) {
+  const byName = new Map();
+  const add = (ex, sets) => {
+    if (!ex?.name || !(sets > 0)) return;
+    const existing = byName.get(ex.name);
+    if (!existing || sets > existing.sets) {
+      byName.set(ex.name, { name: ex.name, sets, reps: ex.reps, target_weight: ex.target_weight });
+    }
+  };
 
   for (const day of parsed.days || []) {
     if (day.is_rest || !Array.isArray(day.exercises)) continue;
-    const remainingExercises = [];
     for (const ex of day.exercises) {
       if (ex.skipped) continue; // user chose to skip — don't carry it forward
       const { count } = db.prepare(`
         SELECT COUNT(*) AS count FROM workout_logs
         WHERE plan_id = ? AND day_index = ? AND exercise_name = ?
       `).get(planId, day.day_index, ex.name);
-      const remaining = (ex.sets || 0) - count;
-      if (remaining > 0) {
-        remainingExercises.push({ ...ex, sets: remaining, carried_over: true });
-      }
-    }
-    if (remainingExercises.length) {
-      days.push({ name: day.name, is_rest: false, exercises: remainingExercises, carried_over: true });
+      add(ex, (ex.sets || 0) - count);
     }
   }
 
-  // Whole days rolled over from a previous reset / smart-shifted rest day.
+  // Exercises stashed as whole days (rest-day overflow / session-cap) and legacy.
   for (const d of parsed._carryover_days || []) {
-    days.push({ name: d.name, is_rest: false, exercises: d.exercises, carried_over: true });
+    for (const ex of d.exercises || []) add(ex, ex.sets || 0);
   }
+  for (const ex of parsed._carryover || []) add(ex, ex.sets || 0);
 
-  // Back-compat: legacy loose-exercise carryover → wrap into one carried day.
-  if (Array.isArray(parsed._carryover) && parsed._carryover.length) {
-    days.push({
-      name: 'Carried over',
-      is_rest: false,
-      exercises: parsed._carryover.map(ex => ({ ...ex, carried_over: true })),
-      carried_over: true,
-    });
-  }
-
-  return days;
+  return [...byName.values()];
 }
 
 /**
@@ -123,40 +113,21 @@ export function startWeeklyCron() {
           return { date_range: latestReportRow.date_range, created_at: latestReportRow.created_at, user_note: latestReportRow.user_note || null, summary: r.summary, concerns: r.concerns, recommendations: r.recommendations };
         })() : null;
 
-        // Capture the outgoing plan so we can carry forward unfinished WHOLE DAYS.
+        // Capture the outgoing plan so we can fold unfinished work into next week.
         const outgoing = db.prepare(`
           SELECT id, plan_json FROM plans
           WHERE user_id = ? AND is_active = 1
           ORDER BY id DESC LIMIT 1
         `).get(userId);
-        const carriedDays = outgoing
-          ? getUnfinishedDays(outgoing.id, JSON.parse(outgoing.plan_json))
+        const carryList = outgoing
+          ? getCarryForwardExercises(outgoing.id, JSON.parse(outgoing.plan_json))
           : [];
+        const carry_forward = carryList.length ? carryList : null;
 
-        // Inform the LLM of the carried volume so the new week adapts (and does
-        // not re-program the same exercises that we'll prepend as whole days).
-        const carry_forward = carriedDays.length
-          ? carriedDays.flatMap(d => d.exercises.map(e => ({ name: e.name, sets: e.sets, reps: e.reps })))
-          : null;
-
-        // If carried-over work already fills (or overflows) the whole week, the
-        // generated plan would be entirely discarded — skip the LLM call.
-        const plan = carriedDays.length >= 7
-          ? { week_summary: 'Catching up on carried-over work from last week.', days: [] }
-          : await generatePlan({ profile, recent_logs, plan_history, latest_report, carry_forward, mode: 'weekly_adapt' });
-
-        // Stack: prepend carried days, shift the generated week back, keep 7 days.
-        const combined = [...carriedDays, ...plan.days];
-        plan.days = combined.slice(0, 7).map((d, i) => ({ ...d, day_index: i }));
-
-        // FIFO roll-over: only genuinely-unfinished days that overflow past day 7
-        // roll to the next reset (the bumped-off fresh tail is regenerated then).
-        // Merge with any days enforceSessionCount already stashed on the new plan.
-        const overflowCarried = combined.slice(7).filter(d => d.carried_over);
-        const rolled = [...(plan._carryover_days || []), ...overflowCarried]
-          .map(({ day_index, ...d }) => d);
-        if (rolled.length) plan._carryover_days = rolled;
-        else delete plan._carryover_days;
+        // The LLM owns the whole week: it schedules carry_forward into a balanced
+        // 7-day plan itself (correct training/rest days, no duplication). We do not
+        // manipulate days mechanically anymore.
+        const plan = await generatePlan({ profile, recent_logs, plan_history, latest_report, carry_forward, mode: 'weekly_adapt' });
 
         db.prepare('UPDATE plans SET is_active = 0 WHERE user_id = ? AND is_active = 1').run(userId);
 

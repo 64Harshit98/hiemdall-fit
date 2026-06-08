@@ -57,4 +57,10 @@ export const api = {
   saveReport: (id, note) => request(`/reports/${id}/save`, { method: 'POST', body: JSON.stringify({ save: true, note: note || null }) }),
   unsaveReport: (id) => request(`/reports/${id}/save`, { method: 'POST', body: JSON.stringify({ save: false }) }),
   deleteReport: (id) => request(`/reports/${id}`, { method: 'DELETE' }),
+
+  // admin
+  adminListUsers: () => request('/admin/users'),
+  adminApproveUser: (id) => request(`/admin/users/${id}/approve`, { method: 'POST' }),
+  adminRejectUser: (id) => request(`/admin/users/${id}/reject`, { method: 'POST' }),
+  adminDeleteUser: (id) => request(`/admin/users/${id}`, { method: 'DELETE' }),
 };

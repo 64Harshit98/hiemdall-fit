@@ -6,15 +6,24 @@ export default function Login({ onAuth }) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [err, setErr] = useState(null);
+  const [notice, setNotice] = useState(null);
   const [loading, setLoading] = useState(false);
 
   async function handleSubmit(e) {
     e.preventDefault();
     setErr(null);
+    setNotice(null);
     setLoading(true);
     try {
-      if (isRegister) await api.register(username, password);
-      else await api.login(username, password);
+      if (isRegister) {
+        const r = await api.register(username, password);
+        // New accounts are pending admin approval — no session is created.
+        setNotice(r?.message || 'Registration submitted. An admin will review your account.');
+        setIsRegister(false);
+        setPassword('');
+        return;
+      }
+      await api.login(username, password);
       await onAuth();
     } catch (e) {
       setErr(e.message);
@@ -40,6 +49,7 @@ export default function Login({ onAuth }) {
                    autoComplete={isRegister ? 'new-password' : 'current-password'}
                    minLength={6} required />
           </div>
+          {notice && <div className="notice" style={{ background: 'var(--accent-dim, rgba(120,180,255,0.12))', color: 'var(--accent)', padding: '0.6rem 0.75rem', borderRadius: '8px', fontSize: '0.85rem' }}>{notice}</div>}
           {err && <div className="error">{err}</div>}
           <button type="submit" className="primary" disabled={loading} style={{ marginTop: '0.5rem' }}>
             {loading ? <span className="spinner" /> : (isRegister ? 'create account' : 'sign in')}
@@ -47,7 +57,7 @@ export default function Login({ onAuth }) {
         </form>
 
         <div style={{ textAlign: 'center', marginTop: '1.25rem', fontSize: '0.85rem' }}>
-          <button className="ghost small" onClick={() => { setIsRegister(!isRegister); setErr(null); }}>
+          <button className="ghost small" onClick={() => { setIsRegister(!isRegister); setErr(null); setNotice(null); }}>
             {isRegister ? '← back to sign in' : 'need an account? register →'}
           </button>
         </div>

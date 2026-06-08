@@ -1,4 +1,5 @@
 import Database from 'better-sqlite3';
+import bcrypt from 'bcryptjs';
 import path from 'path';
 import fs from 'fs';
 
@@ -130,5 +131,34 @@ db.prepare(`
   WHERE days_per_week IS NOT NULL
     AND (days_per_week_min IS NULL OR days_per_week_max IS NULL)
 `).run();
+
+// User approval gate: status ('pending' | 'approved' | 'rejected') + admin flag.
+const userCols = db.prepare('PRAGMA table_info(users)').all().map(c => c.name);
+if (!userCols.includes('status')) {
+  // Added without a DEFAULT so existing rows are NULL → backfilled to 'approved'
+  // below (they were already using the app and must not be locked out).
+  db.exec('ALTER TABLE users ADD COLUMN status TEXT');
+  db.exec("UPDATE users SET status = 'approved' WHERE status IS NULL");
+}
+if (!userCols.includes('is_admin')) {
+  db.exec('ALTER TABLE users ADD COLUMN is_admin INTEGER DEFAULT 0');
+}
+
+// Seed / promote the admin account from env. The admin is always approved and
+// can sign in without going through the approval queue.
+const adminUser = process.env.ADMIN_USERNAME;
+const adminPass = process.env.ADMIN_PASSWORD;
+if (adminUser && adminPass) {
+  const existing = db.prepare('SELECT id FROM users WHERE username = ?').get(adminUser);
+  if (!existing) {
+    const hash = bcrypt.hashSync(adminPass, 12);
+    db.prepare("INSERT INTO users (username, password_hash, status, is_admin) VALUES (?, ?, 'approved', 1)").run(adminUser, hash);
+    console.log(`[db] seeded admin user '${adminUser}'`);
+  } else {
+    db.prepare("UPDATE users SET is_admin = 1, status = 'approved' WHERE username = ?").run(adminUser);
+  }
+} else {
+  console.warn('[db] ADMIN_USERNAME / ADMIN_PASSWORD not set — no admin account seeded');
+}
 
 export default db;

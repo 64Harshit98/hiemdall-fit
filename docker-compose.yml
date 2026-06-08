@@ -11,6 +11,8 @@ services:
       - LLM_PROVIDER=${LLM_PROVIDER:-groq}
       - DB_PATH=/data/workout.db
       - TZ=${TZ:-Asia/Kolkata}
+      - ADMIN_USERNAME=${ADMIN_USERNAME:-admin}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD}
     volumes:
       - ./data:/data
     ports:
