@@ -33,6 +33,11 @@ export default function App() {
     navigate('/login');
   }
 
+  async function handleStopImpersonate() {
+    try { await api.adminStopImpersonate(); } catch { /* cookie cleared regardless on reload */ }
+    window.location.assign('/admin');
+  }
+
   if (loading) {
     return (
       <div className="auth-wrap">
@@ -51,13 +56,24 @@ export default function App() {
     );
   }
 
-  // Logged in but no profile → force onboarding (admins skip onboarding)
-  if (!user.has_profile && !user.is_admin && location.pathname !== '/onboarding') {
+  // Logged in but no profile → force onboarding (admins and impersonation skip it)
+  if (!user.has_profile && !user.is_admin && !user.impersonating && location.pathname !== '/onboarding') {
     return <Navigate to="/onboarding" replace />;
   }
 
   return (
     <>
+      {user.impersonating && (
+        <div style={{ background: '#7c2d12', color: '#fff', padding: '0.5rem 1rem', textAlign: 'center', fontSize: '0.85rem', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+          <span>
+            Viewing as <strong>{user.username}</strong>
+            {user.real_user ? <> · admin <strong>{user.real_user.username}</strong></> : null}
+          </span>
+          <button className="ghost small" onClick={handleStopImpersonate} style={{ padding: '0.2rem 0.6rem', fontSize: '0.75rem' }}>
+            Return to admin
+          </button>
+        </div>
+      )}
       <header className="header">
         <div className="header-inner">
           <Link to="/" className="logo">

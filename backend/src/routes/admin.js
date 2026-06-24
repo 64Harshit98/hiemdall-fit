@@ -7,7 +7,11 @@ const router = Router();
 // Gate every admin route: must be authenticated AND flagged is_admin in the DB
 // (checked live, not from the token, so a demotion takes effect immediately).
 function requireAdmin(req, res, next) {
-  const row = db.prepare('SELECT is_admin FROM users WHERE id = ?').get(req.user.id);
+  // Authorize against the real signed-in identity, not the impersonated one —
+  // otherwise an admin impersonating a normal user couldn't reach these routes
+  // (including stop-impersonate).
+  const id = req.realUser?.id ?? req.user.id;
+  const row = db.prepare('SELECT is_admin FROM users WHERE id = ?').get(id);
   if (!row || !row.is_admin) return res.status(403).json({ error: 'admin only' });
   next();
 }
@@ -48,6 +52,31 @@ router.post('/users/:id/approve', (req, res) => setStatus(req, res, 'approved'))
 
 /** Reject a user — they keep their row but cannot sign in. */
 router.post('/users/:id/reject', (req, res) => setStatus(req, res, 'rejected'));
+
+/**
+ * Start impersonating a user: set a cookie that requireAuth resolves into the
+ * effective identity. The whole app then operates as that user.
+ */
+router.post('/impersonate/:id', (req, res) => {
+  const id = Number(req.params.id);
+  const target = db.prepare('SELECT id, username FROM users WHERE id = ?').get(id);
+  if (!target) return res.status(404).json({ error: 'user not found' });
+  if (target.id === req.realUser.id) return res.status(400).json({ error: 'cannot impersonate yourself' });
+  console.log(`[admin] impersonate START: admin '${req.realUser.username}' (${req.realUser.id}) → user '${target.username}' (${target.id})`);
+  res.cookie('impersonate_id', String(target.id), {
+    httpOnly: true,
+    sameSite: 'lax',
+    maxAge: 30 * 24 * 60 * 60 * 1000,
+  });
+  res.json({ ok: true, impersonating: { id: target.id, username: target.username } });
+});
+
+/** Stop impersonating — clear the cookie and return to the admin identity. */
+router.post('/stop-impersonate', (req, res) => {
+  console.log(`[admin] impersonate STOP: admin '${req.realUser.username}' (${req.realUser.id})`);
+  res.clearCookie('impersonate_id');
+  res.json({ ok: true });
+});
 
 /** Permanently delete a user and all their data (cascades via FKs). */
 router.delete('/users/:id', (req, res) => {

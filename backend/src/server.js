@@ -11,6 +11,18 @@ import reportsRouter from './routes/reports.js';
 import adminRouter from './routes/admin.js';
 import { startWeeklyCron } from './services/cron.js';
 
+// Fail fast on an unset/default JWT secret: with admin impersonation live, a
+// forged token signed with the well-known default is a full account-takeover
+// vector. Hard-stop in production; warn loudly in dev.
+if (!process.env.JWT_SECRET || process.env.JWT_SECRET === 'dev-secret-change-me') {
+  const msg = 'JWT_SECRET is unset or set to the insecure default. Set a long random value (e.g. `openssl rand -hex 32`).';
+  if (process.env.NODE_ENV === 'production') {
+    console.error(`[fatal] ${msg}`);
+    process.exit(1);
+  }
+  console.warn(`[warn] ${msg}`);
+}
+
 const app = express();
 
 app.use(cors({

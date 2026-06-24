@@ -63,4 +63,6 @@ export const api = {
   adminApproveUser: (id) => request(`/admin/users/${id}/approve`, { method: 'POST' }),
   adminRejectUser: (id) => request(`/admin/users/${id}/reject`, { method: 'POST' }),
   adminDeleteUser: (id) => request(`/admin/users/${id}`, { method: 'DELETE' }),
+  adminImpersonate: (id) => request(`/admin/impersonate/${id}`, { method: 'POST' }),
+  adminStopImpersonate: () => request('/admin/stop-impersonate', { method: 'POST' }),
 };

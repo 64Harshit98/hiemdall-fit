@@ -67,8 +67,17 @@ app. There is no root `package.json` — backend and frontend are independent.
 - Schema changes go in `backend/src/db/index.js` as **idempotent** `CREATE TABLE IF
   NOT EXISTS` + `PRAGMA table_info` guarded `ALTER TABLE` migrations. The DB is
   long-lived on a Pi — never write a migration that drops data or assumes a fresh DB.
-- Auth: every protected route uses `requireAuth`; it sets `req.user`. New users are
-  `status='pending'` until an admin approves them; the seeded admin bypasses the queue.
+- Auth: every protected route uses `requireAuth`, which sets `req.realUser` (the
+  signed-in identity, used for authorization) and `req.user` (the *effective*
+  identity that data routes scope by). New users are `status='pending'` until an
+  admin approves them; the seeded admin bypasses the queue.
+- **Admin impersonation**: when a signed-in admin carries the `impersonate_id`
+  cookie, `requireAuth` sets `req.user` to the target so the whole app operates as
+  that user. Admin authorization (`requireAdmin`) must therefore key off
+  `req.realUser`, never `req.user`. Controlled via `POST /admin/impersonate/:id` and
+  `POST /admin/stop-impersonate`; the frontend shows a banner while active. Because
+  this enables account takeover, `JWT_SECRET` must be strong — `server.js` hard-stops
+  in production if it's unset or the default.
 
 ## The LLM prompts (most-edited area)
 

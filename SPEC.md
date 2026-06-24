@@ -163,6 +163,7 @@ Stored in `plans.plan_json`, produced by the LLM, validated in `llm.js` before p
 | `POST /reports/:id/save` `DELETE /reports/:id` | manage saved reports |
 | `GET /admin/users` | admin only |
 | `POST /admin/users/:id/approve` `/reject` `DELETE /admin/users/:id` | admin only |
+| `POST /admin/impersonate/:id` `POST /admin/stop-impersonate` | admin only; start/stop "view as" |
 
 ---
 
@@ -186,9 +187,17 @@ Stored in `plans.plan_json`, produced by the LLM, validated in `llm.js` before p
 ## 8. Auth & access control
 
 - Passwords hashed with bcrypt (cost 12). JWT stored in an httpOnly cookie;
-  `requireAuth` (`middleware/auth.js`) verifies it and sets `req.user`.
+  `requireAuth` (`middleware/auth.js`) verifies it and sets `req.realUser` (signed-in
+  identity) and `req.user` (effective identity that data routes scope by).
 - Sign-up is gated: new users are `pending` and cannot use the app until an admin
   approves them. The env-seeded admin bypasses the queue and can approve/reject/delete.
+- **Admin impersonation ("view as")**: an admin can set an `impersonate_id` cookie
+  (`POST /admin/impersonate/:id`) which `requireAuth` resolves into `req.user`, so the
+  entire app operates as the target user. Authorization (`requireAdmin`) keys off
+  `req.realUser`, so the admin can still reach admin routes and stop. Start/stop are
+  logged (`[admin] impersonate START/STOP`). A banner is shown in the UI while active;
+  logout clears the cookie. This is full account access — it relies on a strong
+  `JWT_SECRET` (enforced at boot, see §9).
 - CORS is intentionally permissive (`origin: true, credentials: true`) — the app is
   only reachable over a private network.
 
@@ -198,7 +207,7 @@ Stored in `plans.plan_json`, produced by the LLM, validated in `llm.js` before p
 
 | Var | Purpose |
 |---|---|
-| `JWT_SECRET` | JWT signing secret (set to a long random string) |
+| `JWT_SECRET` | JWT signing secret. **Required** — `server.js` refuses to boot in production if unset or left at the insecure default (`dev-secret-change-me`); warns in dev. Use `openssl rand -hex 32`. |
 | `GROQ_API_KEY` | Groq key (default provider) |
 | `LLM_PROVIDER` | `groq` \| `gemini` \| `openrouter` |
 | `GEMINI_API_KEY` / `OPENROUTER_API_KEY` / `OPENROUTER_MODEL` | alternate providers |

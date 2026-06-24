@@ -20,6 +20,19 @@ export default function Admin() {
 
   useEffect(() => { load(); }, []);
 
+  async function viewAs(u) {
+    setBusyId(u.id);
+    setErr(null);
+    try {
+      await api.adminImpersonate(u.id);
+      // Full reload so all app state re-resolves as the target user.
+      window.location.assign('/');
+    } catch (e) {
+      setErr(e.message);
+      setBusyId(null);
+    }
+  }
+
   async function act(id, fn, confirmMsg) {
     if (confirmMsg && !confirm(confirmMsg)) return;
     setBusyId(id);
@@ -65,6 +78,10 @@ export default function Admin() {
 
             {!u.is_admin && (
               <div className="row" style={{ gap: '0.4rem' }}>
+                <button className="ghost small" disabled={busyId === u.id}
+                        onClick={() => viewAs(u)}>
+                  View as
+                </button>
                 {u.status !== 'approved' && (
                   <button className="primary small" disabled={busyId === u.id}
                           onClick={() => act(u.id, api.adminApproveUser)}>

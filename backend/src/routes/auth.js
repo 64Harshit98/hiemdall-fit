@@ -50,6 +50,7 @@ router.post('/login', async (req, res) => {
 
 router.post('/logout', (req, res) => {
   res.clearCookie('token');
+  res.clearCookie('impersonate_id');
   res.json({ ok: true });
 });
 
@@ -58,7 +59,13 @@ router.get('/me', requireAuth, (req, res) => {
   if (!row) return res.status(404).json({ error: 'user not found' });
   // Also report whether they have a profile yet (drives onboarding redirect)
   const profile = db.prepare('SELECT user_id FROM profiles WHERE user_id = ?').get(req.user.id);
-  res.json({ id: row.id, username: row.username, is_admin: !!row.is_admin, has_profile: !!profile });
+  const resp = { id: row.id, username: row.username, is_admin: !!row.is_admin, has_profile: !!profile };
+  // When impersonating, surface the real admin identity so the UI can show a banner.
+  if (req.impersonating) {
+    resp.impersonating = true;
+    resp.real_user = { id: req.realUser.id, username: req.realUser.username };
+  }
+  res.json(resp);
 });
 
 export default router;
