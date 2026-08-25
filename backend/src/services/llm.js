@@ -12,7 +12,7 @@
  *  - openrouter: free models vary; uses OpenAI-compatible interface
  */
 
-const PROVIDER = (process.env.LLM_PROVIDER || 'groq').toLowerCase();
+const PROVIDER = (process.env.LLM_PROVIDER || "groq").toLowerCase();
 
 // ─── Plan system prompt ────────────────────────────────────────────────────────
 
@@ -110,19 +110,19 @@ Analysis rules:
 // ─── Provider calls ────────────────────────────────────────────────────────────
 
 async function callGroq(systemPrompt, userContent) {
-  const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-    method: 'POST',
+  const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+    method: "POST",
     headers: {
-      'Authorization': `Bearer ${process.env.GROQ_API_KEY}`,
-      'Content-Type': 'application/json',
+      Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+      "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: 'llama-3.3-70b-versatile',
+      model: "compound",
       messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userContent },
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userContent },
       ],
-      response_format: { type: 'json_object' },
+      response_format: { type: "json_object" },
       temperature: 0.7,
       max_tokens: 4096,
     }),
@@ -136,16 +136,16 @@ async function callGroq(systemPrompt, userContent) {
 }
 
 async function callGemini(systemPrompt, userContent) {
-  const model = 'gemini-1.5-flash-latest';
+  const model = "gemini-2.0-flash";
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${process.env.GEMINI_API_KEY}`;
   const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       systemInstruction: { parts: [{ text: systemPrompt }] },
-      contents: [{ role: 'user', parts: [{ text: userContent }] }],
+      contents: [{ role: "user", parts: [{ text: userContent }] }],
       generationConfig: {
-        responseMimeType: 'application/json',
+        responseMimeType: "application/json",
         temperature: 0.7,
         maxOutputTokens: 4096,
       },
@@ -160,19 +160,19 @@ async function callGemini(systemPrompt, userContent) {
 }
 
 async function callOpenRouter(systemPrompt, userContent) {
-  const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-    method: 'POST',
+  const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    method: "POST",
     headers: {
-      'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
-      'Content-Type': 'application/json',
+      Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
+      "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: process.env.OPENROUTER_MODEL || 'meta-llama/llama-3.3-70b-instruct:free',
+      model: process.env.OPENROUTER_MODEL || "meta-llama/llama-3.3-70b-instruct:free",
       messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userContent },
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userContent },
       ],
-      response_format: { type: 'json_object' },
+      response_format: { type: "json_object" },
       temperature: 0.7,
     }),
   });
@@ -187,15 +187,25 @@ async function callOpenRouter(systemPrompt, userContent) {
 async function callProvider(systemPrompt, userContent) {
   let raw;
   switch (PROVIDER) {
-    case 'groq': raw = await callGroq(systemPrompt, userContent); break;
-    case 'gemini': raw = await callGemini(systemPrompt, userContent); break;
-    case 'openrouter': raw = await callOpenRouter(systemPrompt, userContent); break;
-    default: throw new Error(`Unknown LLM_PROVIDER: ${PROVIDER}`);
+    case "groq":
+      raw = await callGroq(systemPrompt, userContent);
+      break;
+    case "gemini":
+      raw = await callGemini(systemPrompt, userContent);
+      break;
+    case "openrouter":
+      raw = await callOpenRouter(systemPrompt, userContent);
+      break;
+    default:
+      throw new Error(`Unknown LLM_PROVIDER: ${PROVIDER}`);
   }
   // Strip accidental code fences
   raw = raw.trim();
-  if (raw.startsWith('```')) {
-    raw = raw.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim();
+  if (raw.startsWith("```")) {
+    raw = raw
+      .replace(/^```(?:json)?\s*/i, "")
+      .replace(/```\s*$/, "")
+      .trim();
   }
   try {
     return JSON.parse(raw);
@@ -208,7 +218,7 @@ async function callProvider(systemPrompt, userContent) {
 
 function buildPlanPrompt({ profile, recent_logs, plan_history, latest_report, carry_forward, mode }) {
   return JSON.stringify({
-    mode: mode || 'initial',
+    mode: mode || "initial",
     profile,
     recent_logs: recent_logs || null,
     plan_history: plan_history || null,
@@ -218,18 +228,18 @@ function buildPlanPrompt({ profile, recent_logs, plan_history, latest_report, ca
 }
 
 function validatePlan(plan) {
-  if (!plan || typeof plan !== 'object') throw new Error('Plan is not an object');
-  if (!Array.isArray(plan.days)) throw new Error('Plan.days must be an array');
+  if (!plan || typeof plan !== "object") throw new Error("Plan is not an object");
+  if (!Array.isArray(plan.days)) throw new Error("Plan.days must be an array");
   if (plan.days.length !== 7) throw new Error(`Plan.days must have 7 entries, got ${plan.days.length}`);
   for (const day of plan.days) {
-    if (typeof day.day_index !== 'number') throw new Error('day.day_index missing');
-    if (typeof day.is_rest !== 'boolean') throw new Error('day.is_rest missing');
+    if (typeof day.day_index !== "number") throw new Error("day.day_index missing");
+    if (typeof day.is_rest !== "boolean") throw new Error("day.is_rest missing");
     if (!day.is_rest) {
       if (!Array.isArray(day.exercises) || day.exercises.length === 0) {
         throw new Error(`day ${day.day_index} non-rest day must have exercises`);
       }
       for (const ex of day.exercises) {
-        if (!ex.name || typeof ex.sets !== 'number' || !ex.reps) {
+        if (!ex.name || typeof ex.sets !== "number" || !ex.reps) {
           throw new Error(`day ${day.day_index} exercise malformed: ${JSON.stringify(ex)}`);
         }
       }
@@ -251,7 +261,7 @@ function enforceSessionCount(plan, profile) {
   if (!profile) return;
   const max = profile.days_per_week_max ?? profile.days_per_week;
   const min = profile.days_per_week_min ?? profile.days_per_week;
-  const training = plan.days.filter(d => !d.is_rest);
+  const training = plan.days.filter((d) => !d.is_rest);
 
   if (max && training.length > max) {
     const excess = training.length - max;
@@ -265,16 +275,18 @@ function enforceSessionCount(plan, profile) {
         carry.push({
           name: day.name,
           is_rest: false,
-          exercises: day.exercises.map(ex => ({ ...ex, carried_over: true })),
+          exercises: day.exercises.map((ex) => ({ ...ex, carried_over: true })),
           carried_over: true,
         });
       }
       day.is_rest = true;
-      day.name = 'Rest';
+      day.name = "Rest";
       day.exercises = [];
     }
     if (carry.length) plan._carryover_days = carry;
-    console.warn(`[plan] training days ${training.length} > max ${max}; capped to ${max}, stashed ${carry.length} day(s) to carryover`);
+    console.warn(
+      `[plan] training days ${training.length} > max ${max}; capped to ${max}, stashed ${carry.length} day(s) to carryover`,
+    );
   } else if (min && training.length < min) {
     console.warn(`[plan] training days ${training.length} < requested min ${min}; leaving as generated`);
   }
@@ -316,10 +328,12 @@ Rules:
 - Every exercise MUST include an alternate_exercise (an easier or equipment-free variation).`;
 
 function validateMobility(m) {
-  if (!m || typeof m !== 'object') throw new Error('Mobility session is not an object');
-  if (!Array.isArray(m.exercises) || m.exercises.length === 0) throw new Error('mobility.exercises must be a non-empty array');
+  if (!m || typeof m !== "object") throw new Error("Mobility session is not an object");
+  if (!Array.isArray(m.exercises) || m.exercises.length === 0)
+    throw new Error("mobility.exercises must be a non-empty array");
   for (const ex of m.exercises) {
-    if (!ex.name || typeof ex.sets !== 'number' || !ex.reps) throw new Error(`mobility exercise malformed: ${JSON.stringify(ex)}`);
+    if (!ex.name || typeof ex.sets !== "number" || !ex.reps)
+      throw new Error(`mobility exercise malformed: ${JSON.stringify(ex)}`);
   }
   return true;
 }
@@ -327,7 +341,7 @@ function validateMobility(m) {
 export async function generateMobilitySession({ profile }) {
   const parsed = await callProvider(MOBILITY_SYSTEM_PROMPT, JSON.stringify({ profile: profile || null }));
   validateMobility(parsed);
-  if (!parsed.name) parsed.name = 'Mobility & Recovery';
+  if (!parsed.name) parsed.name = "Mobility & Recovery";
   return parsed;
 }
 
@@ -338,13 +352,13 @@ function buildReportPrompt({ sessions, days }) {
 }
 
 function validateReport(r) {
-  if (!r || typeof r !== 'object') throw new Error('Report is not an object');
-  if (typeof r.summary !== 'string') throw new Error('report.summary missing');
-  if (!r.metrics || typeof r.metrics.sessions !== 'number') throw new Error('report.metrics missing');
-  if (!Array.isArray(r.strengths)) throw new Error('report.strengths must be array');
-  if (!Array.isArray(r.concerns)) throw new Error('report.concerns must be array');
-  if (!Array.isArray(r.exercise_trends)) throw new Error('report.exercise_trends must be array');
-  if (!Array.isArray(r.recommendations)) throw new Error('report.recommendations must be array');
+  if (!r || typeof r !== "object") throw new Error("Report is not an object");
+  if (typeof r.summary !== "string") throw new Error("report.summary missing");
+  if (!r.metrics || typeof r.metrics.sessions !== "number") throw new Error("report.metrics missing");
+  if (!Array.isArray(r.strengths)) throw new Error("report.strengths must be array");
+  if (!Array.isArray(r.concerns)) throw new Error("report.concerns must be array");
+  if (!Array.isArray(r.exercise_trends)) throw new Error("report.exercise_trends must be array");
+  if (!Array.isArray(r.recommendations)) throw new Error("report.recommendations must be array");
   return true;
 }
 
