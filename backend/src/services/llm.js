@@ -136,7 +136,7 @@ async function callGroq(systemPrompt, userContent) {
 }
 
 async function callGemini(systemPrompt, userContent) {
-  const model = "gemini-2.0-flash";
+  const model = "gemini-flash-latest";
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${process.env.GEMINI_API_KEY}`;
   const res = await fetch(url, {
     method: "POST",
