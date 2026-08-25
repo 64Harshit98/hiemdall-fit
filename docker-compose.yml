@@ -8,6 +8,8 @@ services:
       - PORT=3001
       - JWT_SECRET=${JWT_SECRET}
       - GROQ_API_KEY=${GROQ_API_KEY}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
       - LLM_PROVIDER=${LLM_PROVIDER:-groq}
       - DB_PATH=/data/workout.db
       - TZ=${TZ:-Asia/Kolkata}
