@@ -167,7 +167,7 @@ async function callOpenRouter(systemPrompt, userContent) {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: process.env.OPENROUTER_MODEL || "meta-llama/llama-3.3-70b-instruct:free",
+      model: process.env.OPENROUTER_MODEL || "nvidia/nemotron-3-super-120b-a12b:free",
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: userContent },
